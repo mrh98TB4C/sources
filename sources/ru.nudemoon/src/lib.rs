@@ -31,7 +31,21 @@ impl Nudemoon {
 	}
 
 	fn get_html(url: String) -> Result<Document> {
-		Ok(Self::request(url)?.html()?)
+		let response = Self::request(url)?.send()?;
+		let status = response.status_code();
+		// Aidoku handles Cloudflare in a WebView and stores cf_clearance in shared cookies.
+		// If it still returns a challenge, surface an actionable error instead of parsing it.
+		if Self::is_cloudflare_challenge(status, response.get_header("cf-mitigated")) {
+			bail!("Cloudflare verification required. Complete the WebView challenge and try again");
+		}
+		if status >= 400 {
+			bail!("Nude-Moon HTTP error {status}");
+		}
+		Ok(response.get_html()?)
+	}
+
+	fn is_cloudflare_challenge(status: i32, cf_mitigated: Option<String>) -> bool {
+		matches!(status, 403 | 503) && cf_mitigated.is_some_and(|value| value == "challenge")
 	}
 
 	fn parse_manga_list(url: String) -> Result<MangaPageResult> {
@@ -462,6 +476,23 @@ mod tests {
 			manga.cover,
 			Some(String::from("https://nude-moon.org/cover.jpg"))
 		);
+	}
+
+	#[aidoku_test]
+	fn detects_cloudflare_challenge() {
+		assert!(Nudemoon::is_cloudflare_challenge(
+			403,
+			Some(String::from("challenge"))
+		));
+		assert!(Nudemoon::is_cloudflare_challenge(
+			503,
+			Some(String::from("challenge"))
+		));
+		assert!(!Nudemoon::is_cloudflare_challenge(
+			403,
+			Some(String::from("managed"))
+		));
+		assert!(!Nudemoon::is_cloudflare_challenge(200, None));
 	}
 
 	#[aidoku_test]
