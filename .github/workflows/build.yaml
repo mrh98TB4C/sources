@@ -1,5 +1,6 @@
 name: Build sources
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -12,6 +13,9 @@ on:
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
+
+permissions:
+  contents: write
 
 jobs:
   build:
