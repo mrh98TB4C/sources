@@ -40,13 +40,20 @@ pub fn browse_url(page: i32, sort_index: usize, genres: &[String]) -> String {
 }
 
 pub fn url_key(url: &str) -> Option<String> {
+	if url.is_empty() {
+		return None;
+	}
 	if url.starts_with('/') {
 		return Some(url.into());
 	}
-	url.find("nude-moon.org")
-		.map(|index| &url[index + "nude-moon.org".len()..])
-		.filter(|key| !key.is_empty())
-		.map(Into::into)
+	if let Some(scheme_end) = url.find("://") {
+		let after_scheme = &url[scheme_end + 3..];
+		if let Some(path_start) = after_scheme.find('/') {
+			return Some(after_scheme[path_start..].into());
+		}
+		return None;
+	}
+	Some(url.into())
 }
 
 pub fn clean_title(title: &str) -> String {
@@ -148,7 +155,12 @@ mod tests {
 			url_key("/manga/123-example"),
 			Some(String::from("/manga/123-example"))
 		);
-		assert_eq!(url_key("https://example.org/manga/123"), None);
+		assert_eq!(
+			url_key("https://mirror.example.org/manga/123"),
+			Some(String::from("/manga/123"))
+		);
+		assert_eq!(url_key("manga/123"), Some(String::from("manga/123")));
+		assert_eq!(url_key(""), None);
 	}
 
 	#[aidoku_test]
