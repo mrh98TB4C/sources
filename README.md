@@ -1,14 +1,19 @@
-# Aidoku Community Sources
+# mrh98TB4C Sources
 
-This repository hosts unofficial sources maintained by community members that are installable in [Aidoku](https://github.com/Aidoku/Aidoku).
+Custom Aidoku sources maintained by [mrh98TB4C](https://github.com/mrh98TB4C).
 
 ## Usage
 
-On a device with Aidoku (0.7+) installed, you can open [https://aidoku-community.github.io/sources/](https://aidoku-community.github.io/sources/) and click the "Add Repository" button to add the source list directly to the app.
+On a device with Aidoku (0.7+) installed, open [https://mrh98TB4C.github.io/sources/](https://mrh98TB4C.github.io/sources/) and click the "Add Repository" button to add the source list directly to the app.
 
-Otherwise, navigate to the settings tab, and under the source lists page add `https://aidoku-community.github.io/sources/index.min.json`.
+Otherwise, navigate to the settings tab, and under the source lists page add `https://mrh98TB4C.github.io/sources/index.min.json`.
 
-If a source is not working, or you want to request a source that isn't available in this source list, feel free to [create a new issue](https://github.com/Aidoku-Community/sources/issues).
+## Published sources
+
+- **HenChan** (`ru.henchan`)
+- **Nude-Moon** (`ru.nudemoon`)
+
+If a source is not working, or you want to request a source that isn't available in this source list, feel free to [create a new issue](https://github.com/mrh98TB4C/sources/issues).
 
 ## Contributing
 
@@ -24,4 +29,4 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 This project does not have any affiliation with the content providers nor the Aidoku application.
 
-If you own either a content provider or content that is hosted on one of the content providers that a source is offered for and wish not to have the source be made available on this repo, please contact us or [create a new issue](https://github.com/Aidoku-Community/sources/issues/new) to let us know and we will remove it.
+If you own either a content provider or content that is hosted on one of the content providers that a source is offered for and wish not to have the source be made available on this repo, please contact us or [create a new issue](https://github.com/mrh98TB4C/sources/issues/new) to let us know and we will remove it.
