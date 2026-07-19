@@ -1,0 +1,24 @@
+{
+	"info": {
+		"id": "ru.nudemoon",
+		"name": "Nude-Moon",
+		"version": 1,
+		"url": "https://nude-moon.org",
+		"contentRating": 2,
+		"minAppVersion": "0.8",
+		"languages": ["ru"]
+	},
+	"listings": [
+		{
+			"id": "popular",
+			"name": "Популярное"
+		},
+		{
+			"id": "latest",
+			"name": "Новинки"
+		}
+	],
+	"config": {
+		"hidesFiltersWhileSearching": true
+	}
+}
