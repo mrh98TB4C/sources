@@ -2,13 +2,16 @@
 
 extern crate alloc;
 
+mod auth;
 mod helpers;
 
 use aidoku::{
-	Chapter, ContentRating, FilterValue, ImageRequestProvider, Listing, ListingProvider, Manga,
-	MangaPageResult, MangaStatus, Page, PageContent, PageContext, Result, Source,
+	Chapter, ContentRating, FilterValue, HashMap, ImageRequestProvider, Listing, ListingProvider,
+	Manga, MangaPageResult, MangaStatus, NotificationHandler, Page, PageContent, PageContext,
+	Result, Source, WebLoginHandler,
 	alloc::{String, Vec, vec},
 	imports::{
+		defaults::defaults_get,
 		html::{Document, Element},
 		net::Request,
 		std::send_partial_result,
@@ -17,7 +20,6 @@ use aidoku::{
 };
 
 const BASE_URL: &str = "https://nude-moon.org";
-const COOKIE: &str = "NMfYa=1; nm_mobile=1; Domain=nude-moon.org";
 const MANGA_SELECTOR: &str = "table.news_pic2";
 const NEXT_PAGE_SELECTOR: &str = "a.small:contains(>)";
 
@@ -27,7 +29,7 @@ impl Nudemoon {
 	fn request(url: String) -> Result<Request> {
 		Ok(Request::get(url)?
 			.header("Referer", &format!("{BASE_URL}/"))
-			.header("Cookie", COOKIE))
+			.header("Cookie", &auth::cookie_header()))
 	}
 
 	fn get_html(url: String) -> Result<Document> {
@@ -36,6 +38,7 @@ impl Nudemoon {
 		// Aidoku handles Cloudflare in a WebView and stores cf_clearance in shared cookies.
 		// If it still returns a challenge, surface an actionable error instead of parsing it.
 		if Self::is_cloudflare_challenge(status, response.get_header("cf-mitigated")) {
+			auth::clear_cloudflare();
 			bail!("Cloudflare verification required. Complete the WebView challenge and try again");
 		}
 		if status >= 400 {
@@ -372,7 +375,12 @@ impl Source for Nudemoon {
 		let pages = Self::pages_from_document(&html);
 
 		if pages.is_empty() {
-			bail!("Pages not found. Authorization may be required");
+			if auth::is_authorized() {
+				bail!("Pages not found");
+			}
+			bail!(
+				"Pages not found. Authorization may be required. Open Nude-Moon settings and log in through WebView"
+			);
 		}
 		Ok(pages)
 	}
@@ -392,6 +400,23 @@ impl ListingProvider for Nudemoon {
 impl ImageRequestProvider for Nudemoon {
 	fn get_image_request(&self, url: String, _context: Option<PageContext>) -> Result<Request> {
 		Self::request(url)
+	}
+}
+
+impl WebLoginHandler for Nudemoon {
+	fn handle_web_login(&self, key: String, cookies: HashMap<String, String>) -> Result<bool> {
+		if key != "login" {
+			bail!("Invalid login key: `{key}`");
+		}
+		Ok(auth::save_cookies(&cookies))
+	}
+}
+
+impl NotificationHandler for Nudemoon {
+	fn handle_notification(&self, notification: String) {
+		if notification == "login" && defaults_get::<String>("login").is_none() {
+			auth::clear_auth();
+		}
 	}
 }
 
@@ -511,4 +536,10 @@ mod tests {
 	}
 }
 
-register_source!(Nudemoon, ListingProvider, ImageRequestProvider);
+register_source!(
+	Nudemoon,
+	ListingProvider,
+	ImageRequestProvider,
+	WebLoginHandler,
+	NotificationHandler
+);

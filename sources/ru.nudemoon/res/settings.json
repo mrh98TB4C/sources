@@ -1,0 +1,18 @@
+[
+	{
+		"type": "group",
+		"title": "Аккаунт и Cloudflare",
+		"footer": "Откройте WebView, пройдите Cloudflare и при необходимости войдите в аккаунт. Cookies cf_clearance и fusion_user будут сохранены.",
+		"items": [
+			{
+				"type": "login",
+				"key": "login",
+				"notification": "login",
+				"method": "web",
+				"url": "https://nude-moon.org",
+				"title": "Войти через WebView",
+				"refreshes": ["listings", "content"]
+			}
+		]
+	}
+]
