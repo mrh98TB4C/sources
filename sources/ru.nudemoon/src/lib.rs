@@ -36,7 +36,13 @@ impl Nudemoon {
 		println!("NudeMoon: GET {url}");
 		let response = Self::request(url)?.send()?;
 		let status = response.status_code();
-		println!("NudeMoon: status={status}");
+		let content_type = response.get_header("content-type");
+		let content_length = response.get_header("content-length");
+		let content_encoding = response.get_header("content-encoding");
+		let server = response.get_header("server");
+		println!(
+			"NudeMoon: status={status}, content-type={content_type:?}, content-length={content_length:?}, content-encoding={content_encoding:?}, server={server:?}"
+		);
 		// Aidoku handles Cloudflare in a WebView and stores cf_clearance in shared cookies.
 		// If it still returns a challenge, surface an actionable error instead of parsing it.
 		if Self::is_cloudflare_challenge(status, response.get_header("cf-mitigated")) {
