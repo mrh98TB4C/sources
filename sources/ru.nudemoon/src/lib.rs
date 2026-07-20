@@ -33,15 +33,19 @@ impl Nudemoon {
 	}
 
 	fn get_html(url: String) -> Result<Document> {
+		println!("NudeMoon: GET {url}");
 		let response = Self::request(url)?.send()?;
 		let status = response.status_code();
+		println!("NudeMoon: status={status}");
 		// Aidoku handles Cloudflare in a WebView and stores cf_clearance in shared cookies.
 		// If it still returns a challenge, surface an actionable error instead of parsing it.
 		if Self::is_cloudflare_challenge(status, response.get_header("cf-mitigated")) {
+			println!("NudeMoon: Cloudflare challenge detected, clearing stored clearance");
 			auth::clear_cloudflare();
 			bail!("Cloudflare verification required. Complete the WebView challenge and try again");
 		}
 		if status >= 400 {
+			println!("NudeMoon: HTTP error {status}");
 			bail!("Nude-Moon HTTP error {status}");
 		}
 		Ok(response.get_html()?)
@@ -53,11 +57,20 @@ impl Nudemoon {
 
 	fn parse_manga_list(url: String) -> Result<MangaPageResult> {
 		let html = Self::get_html(url)?;
-		let entries = html
+		let table_count = html
+			.select(MANGA_SELECTOR)
+			.map(|els| els.count())
+			.unwrap_or(0);
+		println!("NudeMoon: found {table_count} tables matching '{MANGA_SELECTOR}'");
+		let entries: Vec<Manga> = html
 			.select(MANGA_SELECTOR)
 			.map(|els| els.filter_map(|el| Self::manga_from_element(&el)).collect())
 			.unwrap_or_default();
 		let has_next_page = html.select_first(NEXT_PAGE_SELECTOR).is_some();
+		println!(
+			"NudeMoon: parsed {} entries, has_next={has_next_page}",
+			entries.len()
+		);
 
 		Ok(MangaPageResult {
 			entries,
@@ -71,6 +84,7 @@ impl Nudemoon {
 		let key = helpers::url_key(&href)?;
 		let title = helpers::clean_title(&link.text()?);
 		if title.is_empty() {
+			println!("NudeMoon: skipping element, empty title, href={href}");
 			return None;
 		}
 		let cover = element
