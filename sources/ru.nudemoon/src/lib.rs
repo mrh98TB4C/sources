@@ -57,11 +57,24 @@ impl Nudemoon {
 
 	fn parse_manga_list(url: String) -> Result<MangaPageResult> {
 		let html = Self::get_html(url)?;
-		let table_count = html
-			.select(MANGA_SELECTOR)
+		let title = html
+			.select_first("title")
+			.and_then(|el| el.text())
+			.unwrap_or_default();
+		let all_tables = html.select("table").map(|els| els.count()).unwrap_or(0);
+		let news_pic = html
+			.select("table.news_pic")
 			.map(|els| els.count())
 			.unwrap_or(0);
-		println!("NudeMoon: found {table_count} tables matching '{MANGA_SELECTOR}'");
+		let news_pic2 = html
+			.select("table.news_pic2")
+			.map(|els| els.count())
+			.unwrap_or(0);
+		let all_links = html.select("a").map(|els| els.count()).unwrap_or(0);
+		let all_imgs = html.select("img").map(|els| els.count()).unwrap_or(0);
+		println!(
+			"NudeMoon: title='{title}', tables={all_tables}, news_pic={news_pic}, news_pic2={news_pic2}, links={all_links}, imgs={all_imgs}"
+		);
 		let entries: Vec<Manga> = html
 			.select(MANGA_SELECTOR)
 			.map(|els| els.filter_map(|el| Self::manga_from_element(&el)).collect())
