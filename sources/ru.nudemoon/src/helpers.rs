@@ -111,6 +111,30 @@ fn cp1251_byte(c: char) -> Option<u8> {
 	}
 }
 
+pub fn decode_cp1251(data: &[u8]) -> String {
+	data.iter().map(|&b| decode_cp1251_byte(b)).collect()
+}
+
+fn decode_cp1251_byte(byte: u8) -> char {
+	match byte {
+		0x00..=0x7F => byte as char,
+		0xA8 => 'Ё',
+		0xB8 => 'ё',
+		0x96 => '\u{2013}',
+		0x97 => '\u{2014}',
+		0x91 => '\u{2018}',
+		0x92 => '\u{2019}',
+		0x93 => '\u{201C}',
+		0x94 => '\u{201D}',
+		0xAB => '«',
+		0xBB => '»',
+		0xB9 => '№',
+		0xC0..=0xDF => char::from_u32(0x0410 + (byte - 0xC0) as u32).unwrap_or('?'),
+		0xE0..=0xFF => char::from_u32(0x0430 + (byte - 0xE0) as u32).unwrap_or('?'),
+		_ => '?',
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -179,5 +203,12 @@ mod tests {
 	fn chapter_number_reads_number_marker() {
 		assert_eq!(chapter_number("Example Title №12.5 часть"), Some(12.5));
 		assert_eq!(chapter_number("Example Title"), None);
+	}
+
+	#[aidoku_test]
+	fn decode_cp1251_converts_cyrillic() {
+		// "тест" in windows-1251: F2 E5 F1 F2
+		let decoded = decode_cp1251(&[0xF2, 0xE5, 0xF1, 0xF2]);
+		assert_eq!(decoded, "тест");
 	}
 }

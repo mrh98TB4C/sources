@@ -12,7 +12,7 @@ use aidoku::{
 	alloc::{String, Vec, vec},
 	imports::{
 		defaults::defaults_get,
-		html::{Document, Element},
+		html::{Document, Element, Html},
 		net::Request,
 		std::send_partial_result,
 	},
@@ -34,45 +34,22 @@ impl Nudemoon {
 	}
 
 	fn get_html(url: String) -> Result<Document> {
-		println!("NudeMoon: GET {url}");
-		let response = Self::request(url)?.send()?;
+		let response = Self::request(url.clone())?.send()?;
 		let status = response.status_code();
-		let content_type = response.get_header("content-type");
-		let content_length = response.get_header("content-length");
-		let content_encoding = response.get_header("content-encoding");
-		let server = response.get_header("server");
-		println!(
-			"NudeMoon: status={status}, content-type={content_type:?}, content-length={content_length:?}, content-encoding={content_encoding:?}, server={server:?}"
-		);
-		if let Ok(data) = response.get_data() {
-			let snippet: String = data
-				.iter()
-				.take(300)
-				.map(|b| {
-					if b.is_ascii_graphic()
-						|| *b == b' ' || *b == b'\n'
-						|| *b == b'\r' || *b == b'\t'
-					{
-						*b as char
-					} else {
-						'.'
-					}
-				})
-				.collect();
-			println!("NudeMoon: data_len={}, snippet='{}'", data.len(), snippet);
-		}
 		// Aidoku handles Cloudflare in a WebView and stores cf_clearance in shared cookies.
 		// If it still returns a challenge, surface an actionable error instead of parsing it.
 		if Self::is_cloudflare_challenge(status, response.get_header("cf-mitigated")) {
-			println!("NudeMoon: Cloudflare challenge detected, clearing stored clearance");
 			auth::clear_cloudflare();
 			bail!("Cloudflare verification required. Complete the WebView challenge and try again");
 		}
 		if status >= 400 {
-			println!("NudeMoon: HTTP error {status}");
 			bail!("Nude-Moon HTTP error {status}");
 		}
-		Ok(response.get_html()?)
+		// Site returns windows-1251, which Aidoku cannot decode natively.
+		// Decode manually and parse with the original URL as base.
+		let data = response.get_data()?;
+		let html_str = helpers::decode_cp1251(&data);
+		Ok(Html::parse_with_url(&html_str, &url)?)
 	}
 
 	fn is_cloudflare_challenge(status: i32, cf_mitigated: Option<String>) -> bool {
