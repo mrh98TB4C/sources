@@ -32,7 +32,7 @@ pub fn browse_url(page: i32, sort_index: usize, genres: &[String]) -> String {
 			"{BASE_URL}/tags/{}{order}&rowstart={rowstart}",
 			genres
 				.iter()
-				.map(encode_uri_component)
+				.map(|g| encode_uri_component(g.replace(' ', "_")))
 				.collect::<Vec<_>>()
 				.join("+")
 		)
@@ -160,6 +160,15 @@ mod tests {
 		);
 	}
 
+	#[aidoku_test]
+	fn browse_url_replaces_spaces_with_underscores_in_genres() {
+		// Aidoku filter sends "Без цензуры" (display name), site expects "Без_цензуры"
+		let genres = Vec::from([String::from("Без цензуры")]);
+		assert_eq!(
+			browse_url(1, 1, &genres),
+			"https://nude-moon.org/tags/%D0%91%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B&views&rowstart=0"
+		);
+	}
 	#[aidoku_test]
 	fn browse_url_combines_genres_and_sort() {
 		let genres = Vec::from([String::from("без_цензуры"), String::from("x-ray")]);
