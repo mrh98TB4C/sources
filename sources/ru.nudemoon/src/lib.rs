@@ -75,7 +75,8 @@ impl Nudemoon {
 		}
 		let cover = element
 			.select_first("a img")
-			.and_then(|img| img.attr("abs:src"));
+			.or_else(|| element.select_first("img"))
+			.and_then(|img| img.attr("abs:data-src").or_else(|| img.attr("abs:src")));
 		let url = format!("{BASE_URL}{key}");
 
 		Some(Manga {
@@ -446,6 +447,25 @@ mod tests {
 			Some(String::from("https://nude-moon.org/covers/example.jpg"))
 		);
 		assert_eq!(manga.content_rating, ContentRating::NSFW);
+	}
+
+	#[aidoku_test]
+	fn parses_manga_cover_from_data_src() {
+		let html = Html::parse_with_url(
+			r#"<table class="news_pic2"><tr><td>
+			<a href="/manga/123-example"><img data-src="/covers/example.jpg" src="/placeholder.gif"></a>
+			<a href="/manga/123-example"><h2>Example Title / Русский №2</h2></a>
+			</td></tr></table>"#,
+			BASE_URL,
+		)
+		.unwrap();
+		let element = html.select_first(MANGA_SELECTOR).unwrap();
+		let manga = Nudemoon::manga_from_element(&element).unwrap();
+
+		assert_eq!(
+			manga.cover,
+			Some(String::from("https://nude-moon.org/covers/example.jpg"))
+		);
 	}
 
 	#[aidoku_test]
