@@ -58,33 +58,11 @@ impl Nudemoon {
 
 	fn parse_manga_list(url: String) -> Result<MangaPageResult> {
 		let html = Self::get_html(url)?;
-		let title = html
-			.select_first("title")
-			.and_then(|el| el.text())
-			.unwrap_or_default();
-		let all_tables = html.select("table").map(|els| els.count()).unwrap_or(0);
-		let news_pic = html
-			.select("table.news_pic")
-			.map(|els| els.count())
-			.unwrap_or(0);
-		let news_pic2 = html
-			.select("table.news_pic2")
-			.map(|els| els.count())
-			.unwrap_or(0);
-		let all_links = html.select("a").map(|els| els.count()).unwrap_or(0);
-		let all_imgs = html.select("img").map(|els| els.count()).unwrap_or(0);
-		println!(
-			"NudeMoon: title='{title}', tables={all_tables}, news_pic={news_pic}, news_pic2={news_pic2}, links={all_links}, imgs={all_imgs}"
-		);
 		let entries: Vec<Manga> = html
 			.select(MANGA_SELECTOR)
 			.map(|els| els.filter_map(|el| Self::manga_from_element(&el)).collect())
 			.unwrap_or_default();
 		let has_next_page = html.select_first(NEXT_PAGE_SELECTOR).is_some();
-		println!(
-			"NudeMoon: parsed {} entries, has_next={has_next_page}",
-			entries.len()
-		);
 
 		Ok(MangaPageResult {
 			entries,
@@ -98,7 +76,6 @@ impl Nudemoon {
 		let key = helpers::url_key(&href)?;
 		let title = helpers::clean_title(&link.text()?);
 		if title.is_empty() {
-			println!("NudeMoon: skipping element, empty title, href={href}");
 			return None;
 		}
 		let cover = element
