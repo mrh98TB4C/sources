@@ -29,7 +29,8 @@ impl Nudemoon {
 	fn request(url: String) -> Result<Request> {
 		Ok(Request::get(url)?
 			.header("Referer", &format!("{BASE_URL}/"))
-			.header("Cookie", &auth::cookie_header()))
+			.header("Cookie", &auth::cookie_header())
+			.header("Accept-Encoding", "gzip, deflate, identity"))
 	}
 
 	fn get_html(url: String) -> Result<Document> {
