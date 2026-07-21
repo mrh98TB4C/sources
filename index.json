@@ -1,0 +1,44 @@
+{
+  "name": "mrh98TB4C Sources",
+  "sources": [
+    {
+      "id": "ru.acomics",
+      "name": "AComics",
+      "version": 3,
+      "iconURL": "icons/ru.acomics-v3.png",
+      "downloadURL": "sources/ru.acomics-v3.aix",
+      "languages": [
+        "ru"
+      ],
+      "contentRating": 2,
+      "baseURL": "https://acomics.ru",
+      "minAppVersion": "0.8"
+    },
+    {
+      "id": "ru.henchan",
+      "name": "HenChan",
+      "version": 2,
+      "iconURL": "icons/ru.henchan-v2.png",
+      "downloadURL": "sources/ru.henchan-v2.aix",
+      "languages": [
+        "ru"
+      ],
+      "contentRating": 2,
+      "baseURL": "https://xxl.hentaichan.live",
+      "minAppVersion": "0.8"
+    },
+    {
+      "id": "ru.nudemoon",
+      "name": "Nude-Moon",
+      "version": 13,
+      "iconURL": "icons/ru.nudemoon-v13.png",
+      "downloadURL": "sources/ru.nudemoon-v13.aix",
+      "languages": [
+        "ru"
+      ],
+      "contentRating": 2,
+      "baseURL": "https://nude-moon.org",
+      "minAppVersion": "0.8"
+    }
+  ]
+}
