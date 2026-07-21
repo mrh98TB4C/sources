@@ -2,7 +2,7 @@
 	"info": {
 		"id": "ru.henchan",
 		"name": "HenChan",
-		"version": 1,
+		"version": 2,
 		"url": "https://xxl.hentaichan.live",
 		"contentRating": 2,
 		"minAppVersion": "0.8",
@@ -10,12 +10,12 @@
 	},
 	"listings": [
 		{
-			"id": "popular",
-			"name": "Популярное"
-		},
-		{
 			"id": "latest",
 			"name": "Новинки"
+		},
+		{
+			"id": "popular",
+			"name": "Популярное"
 		}
 	],
 	"config": {
