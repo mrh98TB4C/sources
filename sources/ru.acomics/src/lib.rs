@@ -116,7 +116,7 @@ fn parse_details(html: &Document, manga: &mut Manga) {
 fn chapter_count(html: &Document) -> Option<i32> {
 	let text = html
 		.select_first("p:has(b:contains(Количество выпусков:))")?
-		.text()?;
+		.own_text()?;
 	text.trim().parse().ok()
 }
 
@@ -381,6 +381,7 @@ mod tests {
 
 	#[aidoku_test]
 	fn chapter_count_parses() {
+		// .own_text() only reads text directly in <p>, excluding <b> child
 		let html =
 			Html::parse_with_url(r#"<p><b>Количество выпусков:</b> 42</p>"#, BASE_URL).unwrap();
 		assert_eq!(chapter_count(&html), Some(42));
