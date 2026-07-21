@@ -7,7 +7,7 @@ on:
     paths:
       - "sources/ru.henchan/**"
       - "sources/ru.nudemoon/**"
-      - "public/**"
+      - "sources/ru.acomics/**"
       - ".github/workflows/build.yaml"
 
 concurrency:
@@ -23,7 +23,7 @@ jobs:
       RUSTC_WRAPPER: sccache
       SCCACHE_CACHE_SIZE: 2G
       SCCACHE_VERSION: 0.3.0
-      CUSTOM_SOURCES: ru.henchan ru.nudemoon
+      CUSTOM_SOURCES: ru.henchan ru.nudemoon ru.acomics
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
