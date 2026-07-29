@@ -41,10 +41,17 @@ pub fn browse_url(page: i32, sort_index: usize, genres: &[String]) -> String {
 
 /// Convert a genre display name (from filters or a manga page tag) to the
 /// site tag slug: lowercase with underscores (e.g. "Без цензуры" -> "без_цензуры").
-/// The site's 3D tag is literally "3D", not "3d_арт".
 pub fn genre_slug(display: &str) -> String {
-	if display.eq_ignore_ascii_case("3D арт") || display == "3d_арт" {
-		return String::from("3D");
+	match display {
+		// Site renamed the incest tag to a transliterated slug
+		"Инцест" | "инцест" => return String::from("inseki"),
+		// Site slug contains a typo (быссейне)
+		"В бассейне" | "в бассейне" | "в_бассейне" => {
+			return String::from("в_быссейне");
+		}
+		// The 3D tag slug is literally "3D"
+		"3D" | "3D арт" | "3d_арт" => return String::from("3D"),
+		_ => {}
 	}
 	display.to_lowercase().replace(' ', "_")
 }
@@ -195,6 +202,17 @@ mod tests {
 	fn genre_slug_maps_3d_art_to_3d() {
 		assert_eq!(genre_slug("3D арт"), "3D");
 		assert_eq!(genre_slug("3d_арт"), "3D");
+		assert_eq!(genre_slug("3D"), "3D");
+	}
+
+	#[aidoku_test]
+	fn genre_slug_maps_renamed_and_typo_tags() {
+		// Site renamed инцест to inseki
+		assert_eq!(genre_slug("Инцест"), "inseki");
+		assert_eq!(genre_slug("инцест"), "inseki");
+		// Site slug has a typo
+		assert_eq!(genre_slug("В бассейне"), "в_быссейне");
+		assert_eq!(genre_slug("в_бассейне"), "в_быссейне");
 	}
 	#[aidoku_test]
 	fn browse_url_combines_genres_and_sort() {
