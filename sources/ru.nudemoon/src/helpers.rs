@@ -32,11 +32,21 @@ pub fn browse_url(page: i32, sort_index: usize, genres: &[String]) -> String {
 			"{BASE_URL}/tags/{}{order}&rowstart={rowstart}",
 			genres
 				.iter()
-				.map(|g| encode_uri_component(g.replace(' ', "_")))
+				.map(|g| encode_uri_component(genre_slug(g)))
 				.collect::<Vec<_>>()
 				.join("+")
 		)
 	}
+}
+
+/// Convert a genre display name (from filters or a manga page tag) to the
+/// site tag slug: lowercase with underscores (e.g. "Без цензуры" -> "без_цензуры").
+/// The site's 3D tag is literally "3D", not "3d_арт".
+pub fn genre_slug(display: &str) -> String {
+	if display.eq_ignore_ascii_case("3D арт") || display == "3d_арт" {
+		return String::from("3D");
+	}
+	display.to_lowercase().replace(' ', "_")
 }
 
 pub fn url_key(url: &str) -> Option<String> {
@@ -162,12 +172,29 @@ mod tests {
 
 	#[aidoku_test]
 	fn browse_url_replaces_spaces_with_underscores_in_genres() {
-		// Aidoku filter sends "Без цензуры" (display name), site expects "Без_цензуры"
+		// Aidoku filter sends "Без цензуры" (display name), site expects "без_цензуры"
 		let genres = Vec::from([String::from("Без цензуры")]);
 		assert_eq!(
 			browse_url(1, 1, &genres),
-			"https://nude-moon.org/tags/%D0%91%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B&views&rowstart=0"
+			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B&views&rowstart=0"
 		);
+	}
+
+	#[aidoku_test]
+	fn genre_slug_lowercases_display_names() {
+		assert_eq!(genre_slug("Анал"), "анал");
+		assert_eq!(genre_slug("Без цензуры"), "без_цензуры");
+		assert_eq!(genre_slug("Gender bender"), "gender_bender");
+		assert_eq!(genre_slug("X-ray"), "x-ray");
+		// Tags from manga pages are already lowercase — idempotent
+		assert_eq!(genre_slug("большие груди"), "большие_груди");
+		assert_eq!(genre_slug("ahegao"), "ahegao");
+	}
+
+	#[aidoku_test]
+	fn genre_slug_maps_3d_art_to_3d() {
+		assert_eq!(genre_slug("3D арт"), "3D");
+		assert_eq!(genre_slug("3d_арт"), "3D");
 	}
 	#[aidoku_test]
 	fn browse_url_combines_genres_and_sort() {

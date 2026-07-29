@@ -104,7 +104,7 @@ impl Nudemoon {
 				.select_first("a[href*=mangaka]")
 				.and_then(|el| el.text())
 				.map(|author| vec![author]);
-			manga.tags = info.select("div.tag-links a").map(|els| {
+			manga.tags = info.select(".tag-links a").map(|els| {
 				els.filter_map(|el| el.text())
 					.filter(|tag| !tag.trim().is_empty())
 					.collect()
@@ -115,6 +115,20 @@ impl Nudemoon {
 			.select_first(".description")
 			.and_then(|el| el.text())
 			.map(|description| description.trim().into());
+
+		// Series (seria/) and cycle (group/) links live in the info block;
+		// prepend them to the description for visibility.
+		let mut meta_lines: Vec<String> = Vec::new();
+		if let Some(series) = Self::info_link_text(html, "seria/") {
+			meta_lines.push(format!("Серия: {series}"));
+		}
+		if let Some(cycle) = Self::info_link_text(html, "group/") {
+			meta_lines.push(format!("Цикл: {cycle}"));
+		}
+		if !meta_lines.is_empty() {
+			let base = manga.description.clone().unwrap_or_default();
+			manga.description = Some(format!("{}\n\n{base}", meta_lines.join("\n")));
+		}
 		if let Some(cover) = html
 			.select_first("meta[property='og:image']")
 			.and_then(|el| el.attr("content"))
@@ -125,6 +139,17 @@ impl Nudemoon {
 		manga.status = MangaStatus::Unknown;
 		manga.content_rating = ContentRating::NSFW;
 		manga.url = Some(format!("{BASE_URL}{}", manga.key));
+	}
+
+	/// Find an info-block link by href segment (e.g. "seria/" or "group/"),
+	/// skipping navigation links that carry query strings.
+	fn info_link_text(html: &Document, segment: &str) -> Option<String> {
+		html.select(format!("a[href*=\"{segment}\"]"))?
+			.find(|el| {
+				el.attr("href")
+					.is_some_and(|href| href.contains(segment) && !href.contains('?'))
+			})
+			.and_then(|el| el.text())
 	}
 
 	fn fetch_chapters(&self, manga: &Manga, details: &Document) -> Result<Vec<Chapter>> {
@@ -339,6 +364,10 @@ impl Source for Nudemoon {
 					} if id == "genre" => {
 						genres = included;
 					}
+					// Tag tap from manga details: single genre via select filter
+					FilterValue::Select { id, value } if id == "genre" => {
+						genres = vec![value];
+					}
 					_ => {}
 				}
 			}
@@ -492,6 +521,55 @@ mod tests {
 		assert_eq!(chapter.chapter_number, Some(12.5));
 		assert_eq!(chapter.scanlators, Some(Vec::from([String::from("Team")])));
 		assert_eq!(chapter.date_uploaded, Some(1_715_472_000));
+	}
+
+	#[aidoku_test]
+	fn parses_series_and_cycle_into_description() {
+		let html = Html::parse_with_url(
+			r#"<html><body>
+			<h1>Example</h1>
+			<div class="tbl2">Автор: <a href="mangaka/meme50">Meme50</a>
+			Серия: <a title="Показать всю мангу по Fate/Grand Order" href="seria/fate_grand_order">Fate/Grand Order</a><br>
+			Цикл: <a href="group/some_cycle">Some Cycle</a></div>
+			<div class="description">Story text</div>
+			</body></html>"#,
+			BASE_URL,
+		)
+		.unwrap();
+		let mut manga = Manga {
+			key: "/manga/1-example".into(),
+			..Default::default()
+		};
+		Nudemoon::parse_details(&html, &mut manga);
+
+		assert_eq!(
+			manga.description,
+			Some(String::from(
+				"Серия: Fate/Grand Order\nЦикл: Some Cycle\n\nStory text"
+			))
+		);
+	}
+
+	#[aidoku_test]
+	fn skips_menu_seria_links_with_query() {
+		// Menu links (seria/?letter=new) must not be picked up as series
+		let html = Html::parse_with_url(
+			r#"<html><body>
+			<h1>Example</h1>
+			<ul><li><a href="/seria/?letter=new">По аниме и комиксам</a></li>
+			<li><a href="/group/?letter=new">По группам и циклам</a></li></ul>
+			<div class="description">Story text</div>
+			</body></html>"#,
+			BASE_URL,
+		)
+		.unwrap();
+		let mut manga = Manga {
+			key: "/manga/1-example".into(),
+			..Default::default()
+		};
+		Nudemoon::parse_details(&html, &mut manga);
+
+		assert_eq!(manga.description, Some(String::from("Story text")));
 	}
 
 	#[aidoku_test]
