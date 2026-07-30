@@ -24,17 +24,19 @@ pub fn browse_url(page: i32, sort_index: usize, genres: &[String]) -> String {
 		format!("{BASE_URL}/all_manga?{order}&rowstart={rowstart}")
 	} else {
 		let order = match sort_index {
-			0 => "&date",
-			2 => "&like",
-			_ => "&views",
+			0 => "date",
+			2 => "like",
+			_ => "views",
 		};
+		// Site-native format: tags joined by `_`, trailing `_` before params,
+		// e.g. /tags/inseki_анал_&views&rowstart=30
 		format!(
-			"{BASE_URL}/tags/{}{order}&rowstart={rowstart}",
+			"{BASE_URL}/tags/{}_&{order}&rowstart={rowstart}",
 			genres
 				.iter()
 				.map(|g| encode_uri_component(genre_slug(g)))
 				.collect::<Vec<_>>()
-				.join("+")
+				.join("_")
 		)
 	}
 }
@@ -42,16 +44,9 @@ pub fn browse_url(page: i32, sort_index: usize, genres: &[String]) -> String {
 /// Convert a genre display name (from filters or a manga page tag) to the
 /// site tag slug: lowercase with underscores (e.g. "Без цензуры" -> "без_цензуры").
 pub fn genre_slug(display: &str) -> String {
-	match display {
-		// Site renamed the incest tag to a transliterated slug
-		"Инцест" | "инцест" => return String::from("inseki"),
-		// Site slug contains a typo (быссейне)
-		"В бассейне" | "в бассейне" | "в_бассейне" => {
-			return String::from("в_быссейне");
-		}
-		// The 3D tag slug is literally "3D"
-		"3D" | "3D арт" | "3d_арт" => return String::from("3D"),
-		_ => {}
+	// The 3D tag slug is literally "3D"
+	if display.eq_ignore_ascii_case("3D арт") || display == "3d_арт" || display == "3D" {
+		return String::from("3D");
 	}
 	display.to_lowercase().replace(' ', "_")
 }
@@ -183,7 +178,7 @@ mod tests {
 		let genres = Vec::from([String::from("Без цензуры")]);
 		assert_eq!(
 			browse_url(1, 1, &genres),
-			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B&views&rowstart=0"
+			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B_&views&rowstart=0"
 		);
 	}
 
@@ -206,20 +201,12 @@ mod tests {
 	}
 
 	#[aidoku_test]
-	fn genre_slug_maps_renamed_and_typo_tags() {
-		// Site renamed инцест to inseki
-		assert_eq!(genre_slug("Инцест"), "inseki");
-		assert_eq!(genre_slug("инцест"), "inseki");
-		// Site slug has a typo
-		assert_eq!(genre_slug("В бассейне"), "в_быссейне");
-		assert_eq!(genre_slug("в_бассейне"), "в_быссейне");
-	}
-	#[aidoku_test]
 	fn browse_url_combines_genres_and_sort() {
+		// Site-native: tags joined by `_`, trailing `_` before sort params
 		let genres = Vec::from([String::from("без_цензуры"), String::from("x-ray")]);
 		assert_eq!(
 			browse_url(1, 0, &genres),
-			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B+x-ray&date&rowstart=0"
+			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B_x-ray_&date&rowstart=0"
 		);
 	}
 
