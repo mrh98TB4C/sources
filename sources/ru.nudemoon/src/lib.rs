@@ -347,34 +347,44 @@ impl Source for Nudemoon {
 		page: i32,
 		filters: Vec<FilterValue>,
 	) -> Result<MangaPageResult> {
-		let url = if let Some(query) = query.filter(|query| !query.trim().is_empty()) {
-			helpers::search_url(&query, page)
-		} else {
-			let mut sort_index = 1usize;
-			let mut genres: Vec<String> = Vec::new();
-			for filter in filters {
-				match filter {
-					FilterValue::Sort { id, index, .. } if id == "sort" => {
-						sort_index = index as usize;
+		let (url, tag_filtered) =
+			if let Some(query) = query.filter(|query| !query.trim().is_empty()) {
+				(helpers::search_url(&query, page), false)
+			} else {
+				let mut sort_index = 1usize;
+				let mut genres: Vec<String> = Vec::new();
+				for filter in filters {
+					match filter {
+						FilterValue::Sort { id, index, .. } if id == "sort" => {
+							sort_index = index as usize;
+						}
+						FilterValue::MultiSelect {
+							id,
+							included,
+							excluded: _,
+						} if id == "genre" => {
+							genres = included;
+						}
+						// Tag tap from manga details: single genre via select filter
+						FilterValue::Select { id, value } if id == "genre" => {
+							genres = vec![value];
+						}
+						_ => {}
 					}
-					FilterValue::MultiSelect {
-						id,
-						included,
-						excluded: _,
-					} if id == "genre" => {
-						genres = included;
-					}
-					// Tag tap from manga details: single genre via select filter
-					FilterValue::Select { id, value } if id == "genre" => {
-						genres = vec![value];
-					}
-					_ => {}
 				}
-			}
-			helpers::browse_url(page, sort_index, &genres)
-		};
+				let tag_filtered = !genres.is_empty();
+				(helpers::browse_url(page, sort_index, &genres), tag_filtered)
+			};
 
-		Self::parse_manga_list(url)
+		let result = Self::parse_manga_list(url)?;
+		// Some tags (e.g. юри) return an empty listing for anonymous users.
+		// Surface an actionable message instead of a silent "no results".
+		if result.entries.is_empty() && tag_filtered && !auth::is_authorized() {
+			bail!(
+				"Пусто. Этот тег может быть доступен только авторизованным. Войдите через WebView в настройках источника"
+			);
+		}
+		Ok(result)
 	}
 
 	fn get_manga_update(
