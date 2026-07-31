@@ -2,8 +2,8 @@ use aidoku::{
 	HashMap,
 	alloc::{format, string::String, vec::Vec},
 	imports::defaults::{DefaultValue, defaults_get, defaults_set},
+	prelude::*,
 };
-
 const CF_CLEARANCE_KEY: &str = "cfClearance";
 const FUSION_USER_KEY: &str = "fusionUser";
 
@@ -25,15 +25,18 @@ pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 
 pub fn cookie_header() -> String {
 	let mut cookies = Vec::from([String::from("NMfYa=1"), String::from("nm_mobile=1")]);
-	if let Some(cf_clearance) =
-		defaults_get::<String>(CF_CLEARANCE_KEY).filter(|value| !value.is_empty())
-	{
-		cookies.push(format!("cf_clearance={cf_clearance}"));
+	let cf_clearance = defaults_get::<String>(CF_CLEARANCE_KEY).filter(|value| !value.is_empty());
+	let fusion_user = defaults_get::<String>(FUSION_USER_KEY).filter(|value| !value.is_empty());
+	println!(
+		"NudeMoon auth: cf_clearance={}, fusion_user={}",
+		cf_clearance.is_some(),
+		fusion_user.is_some()
+	);
+	if let Some(cf) = cf_clearance {
+		cookies.push(format!("cf_clearance={cf}"));
 	}
-	if let Some(fusion_user) =
-		defaults_get::<String>(FUSION_USER_KEY).filter(|value| !value.is_empty())
-	{
-		cookies.push(format!("fusion_user={fusion_user}"));
+	if let Some(fu) = fusion_user {
+		cookies.push(format!("fusion_user={fu}"));
 	}
 	cookies.push(String::from("Domain=nude-moon.org"));
 	cookies.join("; ")
