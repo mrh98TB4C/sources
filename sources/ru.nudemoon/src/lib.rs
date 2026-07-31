@@ -452,11 +452,6 @@ impl WebLoginHandler for Nudemoon {
 		if key != "login" {
 			bail!("Invalid login key: `{key}`");
 		}
-		println!(
-			"NudeMoon WebLogin: received {} cookies, keys={:?}",
-			cookies.len(),
-			cookies.keys().collect::<Vec<_>>()
-		);
 		Ok(auth::save_cookies(&cookies))
 	}
 }
