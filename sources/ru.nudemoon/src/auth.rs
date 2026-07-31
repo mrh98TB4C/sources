@@ -2,7 +2,6 @@ use aidoku::{
 	HashMap,
 	alloc::{format, string::String, vec::Vec},
 	imports::defaults::{DefaultValue, defaults_get, defaults_set},
-	prelude::*,
 };
 const CF_CLEARANCE_KEY: &str = "cfClearance";
 const FUSION_USER_KEY: &str = "fusionUser";
@@ -16,8 +15,14 @@ pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 		defaults_set(CF_CLEARANCE_KEY, DefaultValue::String(cf_clearance.clone()));
 		saved = true;
 	}
-	if let Some(fusion_user) = cookies.get("fusion_user").filter(|value| !value.is_empty()) {
-		defaults_set(FUSION_USER_KEY, DefaultValue::String(fusion_user.clone()));
+	// Site uses userToken (and historically fusion_user) as the auth cookie.
+	// Save whichever is present.
+	if let Some(token) = cookies
+		.get("userToken")
+		.filter(|value| !value.is_empty())
+		.or_else(|| cookies.get("fusion_user").filter(|value| !value.is_empty()))
+	{
+		defaults_set(FUSION_USER_KEY, DefaultValue::String(token.clone()));
 		saved = true;
 	}
 	saved
@@ -25,23 +30,18 @@ pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 
 pub fn cookie_header() -> String {
 	let mut cookies = Vec::from([String::from("NMfYa=1"), String::from("nm_mobile=1")]);
-	let cf_clearance = defaults_get::<String>(CF_CLEARANCE_KEY).filter(|value| !value.is_empty());
-	let fusion_user = defaults_get::<String>(FUSION_USER_KEY).filter(|value| !value.is_empty());
-	println!(
-		"NudeMoon auth: cf_clearance={}, fusion_user={}",
-		cf_clearance.is_some(),
-		fusion_user.is_some()
-	);
-	if let Some(cf) = cf_clearance {
+	if let Some(cf) = defaults_get::<String>(CF_CLEARANCE_KEY).filter(|v| !v.is_empty()) {
 		cookies.push(format!("cf_clearance={cf}"));
 	}
-	if let Some(fu) = fusion_user {
+	if let Some(fu) = defaults_get::<String>(FUSION_USER_KEY).filter(|v| !v.is_empty()) {
+		// Send the stored token under whatever name we saved it as.
+		// The site recognizes both fusion_user and userToken.
 		cookies.push(format!("fusion_user={fu}"));
+		cookies.push(format!("userToken={fu}"));
 	}
 	cookies.push(String::from("Domain=nude-moon.org"));
 	cookies.join("; ")
 }
-
 pub fn is_authorized() -> bool {
 	defaults_get::<String>(FUSION_USER_KEY).is_some_and(|value| !value.is_empty())
 }
@@ -97,7 +97,7 @@ mod tests {
 		assert!(is_authorized());
 		assert_eq!(
 			cookie_header(),
-			"NMfYa=1; nm_mobile=1; cf_clearance=clearance-token; fusion_user=account-token; Domain=nude-moon.org"
+			"NMfYa=1; nm_mobile=1; cf_clearance=clearance-token; fusion_user=account-token; userToken=account-token; Domain=nude-moon.org"
 		);
 
 		assert!(is_authorized());
