@@ -24,19 +24,17 @@ pub fn browse_url(page: i32, sort_index: usize, genres: &[String]) -> String {
 		format!("{BASE_URL}/all_manga?{order}&rowstart={rowstart}")
 	} else {
 		let order = match sort_index {
-			0 => "date",
-			2 => "like",
-			_ => "views",
+			0 => "&date",
+			2 => "&like",
+			_ => "&views",
 		};
-		// Site-native format: tags joined by `_`, trailing `_` before params,
-		// e.g. /tags/inseki_анал_&views&rowstart=30
 		format!(
-			"{BASE_URL}/tags/{}_&{order}&rowstart={rowstart}",
+			"{BASE_URL}/tags/{}{order}&rowstart={rowstart}",
 			genres
 				.iter()
 				.map(|g| encode_uri_component(genre_slug(g)))
 				.collect::<Vec<_>>()
-				.join("_")
+				.join("+")
 		)
 	}
 }
@@ -178,7 +176,7 @@ mod tests {
 		let genres = Vec::from([String::from("Без цензуры")]);
 		assert_eq!(
 			browse_url(1, 1, &genres),
-			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B_&views&rowstart=0"
+			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B&views&rowstart=0"
 		);
 	}
 
@@ -202,11 +200,11 @@ mod tests {
 
 	#[aidoku_test]
 	fn browse_url_combines_genres_and_sort() {
-		// Site-native: tags joined by `_`, trailing `_` before sort params
+		// Tags joined by +, sort with leading &
 		let genres = Vec::from([String::from("без_цензуры"), String::from("x-ray")]);
 		assert_eq!(
 			browse_url(1, 0, &genres),
-			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B_x-ray_&date&rowstart=0"
+			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B+x-ray&date&rowstart=0"
 		);
 	}
 

@@ -11,7 +11,6 @@ use aidoku::{
 	Result, Source, WebLoginHandler,
 	alloc::{String, Vec, vec},
 	imports::{
-		defaults::defaults_get,
 		html::{Document, Element, Html},
 		net::Request,
 		std::send_partial_result,
@@ -463,10 +462,10 @@ impl WebLoginHandler for Nudemoon {
 }
 
 impl NotificationHandler for Nudemoon {
-	fn handle_notification(&self, notification: String) {
-		if notification == "login" && defaults_get::<String>("login").is_none() {
-			auth::clear_auth();
-		}
+	fn handle_notification(&self, _notification: String) {
+		// Auth is managed exclusively by WebLoginHandler.
+		// Do NOT clear here — Aidoku may fire this after handle_web_login,
+		// wiping the tokens we just saved.
 	}
 }
 

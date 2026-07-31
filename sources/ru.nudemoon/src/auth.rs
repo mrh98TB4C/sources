@@ -55,6 +55,7 @@ pub fn clear_cloudflare() {
 	defaults_set(CF_CLEARANCE_KEY, DefaultValue::String(String::new()));
 }
 
+#[allow(dead_code)]
 pub fn clear_auth() {
 	defaults_set(CF_CLEARANCE_KEY, DefaultValue::String(String::new()));
 	defaults_set(FUSION_USER_KEY, DefaultValue::String(String::new()));
