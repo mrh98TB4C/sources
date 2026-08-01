@@ -3,47 +3,63 @@ use aidoku::{
 	alloc::{format, string::String, vec::Vec},
 	imports::defaults::{DefaultValue, defaults_get, defaults_set},
 };
-const CF_CLEARANCE_KEY: &str = "cfClearance";
-const FUSION_USER_KEY: &str = "fusionUser";
 
+const CF_CLEARANCE_KEY: &str = "cfClearance";
+const SESSION_COOKIES_KEY: &str = "sessionCookies";
+
+/// Save cookies from a WebView login session.
+/// Stores Cloudflare clearance separately; all other non-analytics
+/// cookies are persisted as a session blob and sent with every request.
 pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 	let mut saved = false;
-	if let Some(cf_clearance) = cookies
-		.get("cf_clearance")
-		.filter(|value| !value.is_empty())
-	{
-		defaults_set(CF_CLEARANCE_KEY, DefaultValue::String(cf_clearance.clone()));
+
+	// Cloudflare clearance
+	if let Some(value) = cookies.get("cf_clearance").filter(|v| !v.is_empty()) {
+		defaults_set(CF_CLEARANCE_KEY, DefaultValue::String(value.clone()));
 		saved = true;
 	}
-	// Site uses userToken (and historically fusion_user) as the auth cookie.
-	// Save whichever is present.
-	if let Some(token) = cookies
-		.get("userToken")
-		.filter(|value| !value.is_empty())
-		.or_else(|| cookies.get("fusion_user").filter(|value| !value.is_empty()))
-	{
-		defaults_set(FUSION_USER_KEY, DefaultValue::String(token.clone()));
+
+	// All non-analytics cookies — the site may use any name for auth tokens.
+	let session: Vec<String> = cookies
+		.iter()
+		.filter(|(name, value)| {
+			!value.is_empty()
+				&& *name != "cf_clearance"
+				&& !name.starts_with("_ga")
+				&& !name.starts_with("_gid")
+				&& !name.starts_with("_gat")
+		})
+		.map(|(name, value)| format!("{name}={value}"))
+		.collect();
+
+	if !session.is_empty() {
+		defaults_set(
+			SESSION_COOKIES_KEY,
+			DefaultValue::String(session.join("; ")),
+		);
 		saved = true;
 	}
+
 	saved
 }
 
 pub fn cookie_header() -> String {
 	let mut cookies = Vec::from([String::from("NMfYa=1"), String::from("nm_mobile=1")]);
+
 	if let Some(cf) = defaults_get::<String>(CF_CLEARANCE_KEY).filter(|v| !v.is_empty()) {
 		cookies.push(format!("cf_clearance={cf}"));
 	}
-	if let Some(fu) = defaults_get::<String>(FUSION_USER_KEY).filter(|v| !v.is_empty()) {
-		// Send the stored token under whatever name we saved it as.
-		// The site recognizes both fusion_user and userToken.
-		cookies.push(format!("fusion_user={fu}"));
-		cookies.push(format!("userToken={fu}"));
+
+	if let Some(session) = defaults_get::<String>(SESSION_COOKIES_KEY).filter(|v| !v.is_empty()) {
+		cookies.push(session);
 	}
+
 	cookies.push(String::from("Domain=nude-moon.org"));
 	cookies.join("; ")
 }
+
 pub fn is_authorized() -> bool {
-	defaults_get::<String>(FUSION_USER_KEY).is_some_and(|value| !value.is_empty())
+	defaults_get::<String>(SESSION_COOKIES_KEY).is_some_and(|v| !v.is_empty())
 }
 
 #[expect(dead_code)]
@@ -58,7 +74,7 @@ pub fn clear_cloudflare() {
 #[allow(dead_code)]
 pub fn clear_auth() {
 	defaults_set(CF_CLEARANCE_KEY, DefaultValue::String(String::new()));
-	defaults_set(FUSION_USER_KEY, DefaultValue::String(String::new()));
+	defaults_set(SESSION_COOKIES_KEY, DefaultValue::String(String::new()));
 }
 
 #[cfg(test)]
@@ -66,51 +82,59 @@ mod tests {
 	use super::*;
 	use aidoku_test::aidoku_test;
 
+	fn setup() {
+		clear_auth();
+	}
+
 	#[aidoku_test]
-	fn webview_cookie_lifecycle() {
-		clear_auth();
-		assert_eq!(
-			cookie_header(),
-			"NMfYa=1; nm_mobile=1; Domain=nude-moon.org"
-		);
+	fn webview_saves_non_analytics_cookies() {
+		setup();
 
-		let mut unrelated = HashMap::new();
-		unrelated.insert(String::from("session"), String::from("token"));
-		assert!(!save_cookies(&unrelated));
+		let mut cookies = HashMap::new();
+		cookies.insert(String::from("cf_clearance"), String::from("cf-tok"));
+		cookies.insert(String::from("_ga"), String::from("ga-tok"));
+		cookies.insert(String::from("_gid"), String::from("gid-tok"));
+		cookies.insert(String::from("_gat_gtag_123"), String::from("1"));
+		cookies.insert(String::from("userToken"), String::from("real-auth-token"));
+		cookies.insert(String::from("fusion_visited"), String::from("1"));
 
-		let mut cloudflare = HashMap::new();
-		cloudflare.insert(
-			String::from("cf_clearance"),
-			String::from("clearance-token"),
-		);
-		assert!(save_cookies(&cloudflare));
+		assert!(save_cookies(&cookies));
+		assert!(is_authorized());
 		assert!(has_cloudflare_clearance());
+
+		let header = cookie_header();
+		assert!(header.contains("cf_clearance=cf-tok"));
+		assert!(header.contains("userToken=real-auth-token"));
+		assert!(header.contains("fusion_visited=1"));
+		assert!(!header.contains("_ga"));
+		assert!(!header.contains("_gid"));
+		assert!(!header.contains("_gat"));
+	}
+
+	#[aidoku_test]
+	fn not_authorized_without_session_cookies() {
+		setup();
+
+		let mut cookies = HashMap::new();
+		cookies.insert(String::from("cf_clearance"), String::from("cf-tok"));
+
+		assert!(save_cookies(&cookies));
 		assert!(!is_authorized());
-		assert_eq!(
-			cookie_header(),
-			"NMfYa=1; nm_mobile=1; cf_clearance=clearance-token; Domain=nude-moon.org"
-		);
+		assert!(has_cloudflare_clearance());
+	}
 
-		let mut account = HashMap::new();
-		account.insert(String::from("fusion_user"), String::from("account-token"));
-		assert!(save_cookies(&account));
-		assert!(is_authorized());
-		assert_eq!(
-			cookie_header(),
-			"NMfYa=1; nm_mobile=1; cf_clearance=clearance-token; fusion_user=account-token; userToken=account-token; Domain=nude-moon.org"
-		);
+	#[aidoku_test]
+	fn clear_auth_removes_all() {
+		setup();
 
-		assert!(is_authorized());
-		clear_cloudflare();
-		assert!(!has_cloudflare_clearance());
+		let mut cookies = HashMap::new();
+		cookies.insert(String::from("cf_clearance"), String::from("cf-tok"));
+		cookies.insert(String::from("userToken"), String::from("auth"));
+		save_cookies(&cookies);
 		assert!(is_authorized());
 
 		clear_auth();
-		assert!(!has_cloudflare_clearance());
 		assert!(!is_authorized());
-		assert_eq!(
-			cookie_header(),
-			"NMfYa=1; nm_mobile=1; Domain=nude-moon.org"
-		);
+		assert!(!has_cloudflare_clearance());
 	}
 }
