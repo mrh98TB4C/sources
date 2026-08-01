@@ -19,18 +19,10 @@ pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 	true
 }
 
-pub fn cookie_header() -> String {
-	let manual = defaults_get::<String>("manualCookies").unwrap_or_default();
-	if !manual.is_empty() {
-		return format!("NMfYa=1; nm_mobile=1; {manual}; Domain=nude-moon.org");
-	}
-	let session = defaults_get::<String>(SESSION_KEY).unwrap_or_default();
-	format!("NMfYa=1; nm_mobile=1; {session}; Domain=nude-moon.org")
-}
-
 pub fn is_authorized() -> bool {
-	let session = defaults_get::<String>(SESSION_KEY).unwrap_or_default();
-	!session.is_empty()
+	!defaults_get::<String>(SESSION_KEY)
+		.unwrap_or_default()
+		.is_empty()
 }
 
 pub fn clear_cloudflare() {}
@@ -53,11 +45,7 @@ mod tests {
 		c.insert(String::from("_ga"), String::from("ga"));
 		c.insert(String::from("fusion_user"), String::from("fu"));
 		assert!(save_cookies(&c));
-		let h = cookie_header();
-		assert!(h.contains("cf_clearance=cf"));
-		assert!(h.contains("_ga=ga"));
-		assert!(h.contains("fusion_user=fu"));
-		assert!(h.starts_with("NMfYa=1"));
+		assert!(is_authorized());
 	}
 
 	#[aidoku_test]
