@@ -2,8 +2,8 @@ use aidoku::{
 	HashMap,
 	alloc::{format, string::String, vec::Vec},
 	imports::defaults::{DefaultValue, defaults_get, defaults_set},
+	prelude::*,
 };
-
 const CF_CLEARANCE_KEY: &str = "cfClearance";
 const SESSION_COOKIES_KEY: &str = "sessionCookies";
 
@@ -46,11 +46,21 @@ pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 pub fn cookie_header() -> String {
 	let mut cookies = Vec::from([String::from("NMfYa=1"), String::from("nm_mobile=1")]);
 
-	if let Some(cf) = defaults_get::<String>(CF_CLEARANCE_KEY).filter(|v| !v.is_empty()) {
-		cookies.push(format!("cf_clearance={cf}"));
-	}
+	let has_cf = defaults_get::<String>(CF_CLEARANCE_KEY)
+		.filter(|v| !v.is_empty())
+		.is_some();
+	let session = defaults_get::<String>(SESSION_COOKIES_KEY).unwrap_or_default();
+	let has_session = !session.is_empty();
 
-	if let Some(session) = defaults_get::<String>(SESSION_COOKIES_KEY).filter(|v| !v.is_empty()) {
+	println!("NudeMoon: cf={has_cf} session_len={}", session.len());
+
+	if has_cf {
+		cookies.push(format!(
+			"cf_clearance={}",
+			defaults_get::<String>(CF_CLEARANCE_KEY).unwrap()
+		));
+	}
+	if has_session {
 		cookies.push(session);
 	}
 
