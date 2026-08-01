@@ -1,8 +1,21 @@
 [
 	{
 		"type": "group",
+		"title": "Куки вручную",
+		"footer": "Скопируйте cf_clearance и fusion_user из браузера (F12 → Storage → Cookies → nude-moon.org) в формате cf_clearance=ЗНАЧЕНИЕ; fusion_user=ЗНАЧЕНИЕ; fusion_visited=yes",
+		"items": [
+			{
+				"type": "text",
+				"key": "manualCookies",
+				"title": "Cookies",
+				"placeholder": "cf_clearance=...; fusion_user=...; fusion_visited=yes"
+			}
+		]
+	},
+	{
+		"type": "group",
 		"title": "Аккаунт и Cloudflare",
-		"footer": "Откройте WebView, пройдите Cloudflare и при необходимости войдите в аккаунт. Cookies cf_clearance и fusion_user будут сохранены.",
+		"footer": "Откройте WebView, пройдите Cloudflare и при необходимости войдите в аккаунт.",
 		"items": [
 			{
 				"type": "login",

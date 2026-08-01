@@ -2,75 +2,42 @@ use aidoku::{
 	HashMap,
 	alloc::{format, string::String, vec::Vec},
 	imports::defaults::{DefaultValue, defaults_get, defaults_set},
-	prelude::*,
 };
 
-const CF_CLEARANCE_KEY: &str = "cfClearance";
-const SESSION_COOKIES_KEY: &str = "sessionCookies";
+const SESSION_KEY: &str = "session";
 
 pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
-	let mut saved = false;
-	if let Some(value) = cookies
-		.get("cf_clearance")
-		.filter(|v| !v.is_empty())
-	{
-		defaults_set(CF_CLEARANCE_KEY, DefaultValue::String(value.clone()));
-		saved = true;
-	}
-	let session: Vec<String> = cookies
+	let all: Vec<String> = cookies
 		.iter()
-		.filter(|(name, value)| {
-			!value.is_empty()
-				&& *name != "cf_clearance"
-				&& !name.starts_with("_ga")
-				&& !name.starts_with("_gid")
-				&& !name.starts_with("_gat")
-		})
-		.map(|(name, value)| format!("{name}={value}"))
+		.filter(|(_, v)| !v.is_empty())
+		.map(|(k, v)| format!("{k}={v}"))
 		.collect();
-	if !session.is_empty() {
-		defaults_set(SESSION_COOKIES_KEY, DefaultValue::String(session.join("; ")));
-		saved = true;
+	if all.is_empty() {
+		return false;
 	}
-	saved
+	defaults_set(SESSION_KEY, DefaultValue::String(all.join("; ")));
+	true
 }
 
 pub fn cookie_header() -> String {
-	let mut cookies = Vec::from([String::from("NMfYa=1"), String::from("nm_mobile=1")]);
-	let has_cf = defaults_get::<String>(CF_CLEARANCE_KEY)
-		.filter(|v| !v.is_empty())
-		.is_some();
-	let session = defaults_get::<String>(SESSION_COOKIES_KEY).unwrap_or_default();
-	let has_session = !session.is_empty();
-	println!("NudeMoon: cf={has_cf} session_len={}", session.len());
-	if let Some(v) = has_cf.then(|| defaults_get::<String>(CF_CLEARANCE_KEY)).flatten() {
-		cookies.push(format!("cf_clearance={v}"));
+	let manual = defaults_get::<String>("manualCookies").unwrap_or_default();
+	if !manual.is_empty() {
+		return format!("NMfYa=1; nm_mobile=1; {manual}; Domain=nude-moon.org");
 	}
-	if has_session {
-		cookies.push(session);
-	}
-	cookies.push(String::from("Domain=nude-moon.org"));
-	cookies.join("; ")
+	let session = defaults_get::<String>(SESSION_KEY).unwrap_or_default();
+	format!("NMfYa=1; nm_mobile=1; {session}; Domain=nude-moon.org")
 }
 
 pub fn is_authorized() -> bool {
-	let session = defaults_get::<String>(SESSION_COOKIES_KEY).unwrap_or_default();
-	session.contains("userToken=") || session.contains("fusion_user=")
+	let session = defaults_get::<String>(SESSION_KEY).unwrap_or_default();
+	!session.is_empty()
 }
 
-#[expect(dead_code)]
-pub fn has_cloudflare_clearance() -> bool {
-	defaults_get::<String>(CF_CLEARANCE_KEY).is_some_and(|value| !value.is_empty())
-}
-
-pub fn clear_cloudflare() {
-	defaults_set(CF_CLEARANCE_KEY, DefaultValue::String(String::new()));
-}
+pub fn clear_cloudflare() {}
 
 #[allow(dead_code)]
 pub fn clear_auth() {
-	defaults_set(CF_CLEARANCE_KEY, DefaultValue::String(String::new()));
-	defaults_set(SESSION_COOKIES_KEY, DefaultValue::String(String::new()));
+	defaults_set(SESSION_KEY, DefaultValue::String(String::new()));
 }
 
 #[cfg(test)]
@@ -78,53 +45,38 @@ mod tests {
 	use super::*;
 	use aidoku_test::aidoku_test;
 
-	fn setup() { clear_auth(); }
-
 	#[aidoku_test]
-	fn webview_saves_non_analytics_cookies() {
-		setup();
+	fn saves_all_cookies() {
+		clear_auth();
 		let mut c = HashMap::new();
-		c.insert(String::from("cf_clearance"), String::from("cf-tok"));
-		c.insert(String::from("_ga"), String::from("ga-tok"));
-		c.insert(String::from("userToken"), String::from("real-token"));
-		c.insert(String::from("fusion_visited"), String::from("1"));
+		c.insert(String::from("cf_clearance"), String::from("cf"));
+		c.insert(String::from("_ga"), String::from("ga"));
+		c.insert(String::from("fusion_user"), String::from("fu"));
 		assert!(save_cookies(&c));
-		assert!(is_authorized());
 		let h = cookie_header();
-		assert!(h.contains("cf_clearance=cf-tok"));
-		assert!(h.contains("userToken=real-token"));
-		assert!(h.contains("fusion_visited=1"));
-		assert!(!h.contains("_ga"));
+		assert!(h.contains("cf_clearance=cf"));
+		assert!(h.contains("_ga=ga"));
+		assert!(h.contains("fusion_user=fu"));
+		assert!(h.starts_with("NMfYa=1"));
 	}
 
 	#[aidoku_test]
-	fn fusion_visited_alone_is_not_authorized() {
-		setup();
-		let mut c = HashMap::new();
-		c.insert(String::from("fusion_visited"), String::from("yes"));
-		assert!(save_cookies(&c));
+	fn is_authorized_with_any_cookie() {
+		clear_auth();
 		assert!(!is_authorized());
-	}
-
-	#[aidoku_test]
-	fn fusion_user_is_authorized() {
-		setup();
 		let mut c = HashMap::new();
-		c.insert(String::from("fusion_user"), String::from("123.abc"));
-		assert!(save_cookies(&c));
+		c.insert(String::from("x"), String::from("1"));
+		save_cookies(&c);
 		assert!(is_authorized());
 	}
 
 	#[aidoku_test]
-	fn clear_auth_removes_all() {
-		setup();
+	fn clear_auth_wipes_session() {
 		let mut c = HashMap::new();
-		c.insert(String::from("cf_clearance"), String::from("cf-tok"));
-		c.insert(String::from("userToken"), String::from("auth"));
+		c.insert(String::from("x"), String::from("1"));
 		save_cookies(&c);
 		assert!(is_authorized());
 		clear_auth();
 		assert!(!is_authorized());
-		assert!(!has_cloudflare_clearance());
 	}
 }
