@@ -31,7 +31,7 @@ pub fn browse_url(page: i32, sort_index: usize, genres: &[String]) -> String {
 		// Sort and pagination MUST follow `?` — OkHttp parses `&` in the path
 		// into a proper query string, but the raw URL we send does not.
 		format!(
-			"{BASE_URL}/tags/{}?{order}&rowstart={rowstart}",
+			"{BASE_URL}/tags/{}+?{order}&rowstart={rowstart}",
 			genres
 				.iter()
 				.map(|g| encode_uri_component(genre_slug(g)))
@@ -178,7 +178,7 @@ mod tests {
 		let genres = Vec::from([String::from("Без цензуры")]);
 		assert_eq!(
 			browse_url(1, 1, &genres),
-			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B?views&rowstart=0"
+			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B+?views&rowstart=0"
 		);
 	}
 
@@ -206,7 +206,7 @@ mod tests {
 		let genres = Vec::from([String::from("без_цензуры"), String::from("x-ray")]);
 		assert_eq!(
 			browse_url(1, 0, &genres),
-			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B+x-ray?date&rowstart=0"
+			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B+x-ray+?date&rowstart=0"
 		);
 	}
 
