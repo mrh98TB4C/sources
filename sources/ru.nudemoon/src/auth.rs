@@ -31,9 +31,9 @@ pub fn cookie_header() -> String {
 
 pub fn is_authorized() -> bool {
 	let session = defaults_get::<String>(SESSION_KEY).unwrap_or_default();
-	// Only fusion_user / userToken mean an actual account login.
-	// cf_clearance and fusion_visited are set just by passing Cloudflare.
-	session.contains("fusion_user=") || session.contains("userToken=")
+	// fusion_user is the ONLY account auth cookie. userToken is set for
+	// anonymous visitors too, so it must not count as authorization.
+	session.contains("fusion_user=")
 }
 
 pub fn clear_cloudflare() {}
