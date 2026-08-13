@@ -19,6 +19,16 @@ pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 	true
 }
 
+pub fn cookie_header() -> String {
+	let manual = defaults_get::<String>("manualCookies").unwrap_or_default();
+	let session = if !manual.is_empty() {
+		manual
+	} else {
+		defaults_get::<String>(SESSION_KEY).unwrap_or_default()
+	};
+	format!("NMfYa=1; nm_mobile=1; {session}; Domain=nude-moon.org")
+}
+
 pub fn is_authorized() -> bool {
 	let session = defaults_get::<String>(SESSION_KEY).unwrap_or_default();
 	// Only fusion_user / userToken mean an actual account login.
