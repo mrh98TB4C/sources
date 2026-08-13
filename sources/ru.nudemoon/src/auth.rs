@@ -20,9 +20,10 @@ pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 }
 
 pub fn is_authorized() -> bool {
-	!defaults_get::<String>(SESSION_KEY)
-		.unwrap_or_default()
-		.is_empty()
+	let session = defaults_get::<String>(SESSION_KEY).unwrap_or_default();
+	// Only fusion_user / userToken mean an actual account login.
+	// cf_clearance and fusion_visited are set just by passing Cloudflare.
+	session.contains("fusion_user=") || session.contains("userToken=")
 }
 
 pub fn clear_cloudflare() {}
@@ -49,19 +50,23 @@ mod tests {
 	}
 
 	#[aidoku_test]
-	fn is_authorized_with_any_cookie() {
+	fn is_authorized_requires_real_token() {
 		clear_auth();
 		assert!(!is_authorized());
 		let mut c = HashMap::new();
 		c.insert(String::from("x"), String::from("1"));
 		save_cookies(&c);
+		assert!(!is_authorized()); // arbitrary cookie != auth
+		let mut c2 = HashMap::new();
+		c2.insert(String::from("fusion_user"), String::from("tok"));
+		save_cookies(&c2);
 		assert!(is_authorized());
 	}
 
 	#[aidoku_test]
 	fn clear_auth_wipes_session() {
 		let mut c = HashMap::new();
-		c.insert(String::from("x"), String::from("1"));
+		c.insert(String::from("fusion_user"), String::from("tok"));
 		save_cookies(&c);
 		assert!(is_authorized());
 		clear_auth();

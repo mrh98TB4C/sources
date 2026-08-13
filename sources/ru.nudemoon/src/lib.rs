@@ -376,10 +376,9 @@ impl Source for Nudemoon {
 
 		let result = Self::parse_manga_list(url)?;
 		// Some tags (e.g. юри) return an empty listing for anonymous users.
-		// Surface an actionable message instead of a silent "no results".
 		if result.entries.is_empty() && tag_filtered && !auth::is_authorized() {
 			bail!(
-				"Пусто. Этот тег может быть доступен только авторизованным. Войдите через WebView в настройках источника"
+				"Пусто. Этот тег доступен только после входа на сайте. Откройте настройки источника → Войти через WebView → нажмите «Войти» на сайте и введите логин/пароль"
 			);
 		}
 		Ok(result)
