@@ -70,16 +70,17 @@ pub fn browse_url(
 		};
 		format!("{BASE_URL}/tags/{genres}&sort=manga{order}?offset={offset}")
 	} else {
-		let path = match (sort_index, ascending) {
-			(0, true) => "manga/new&n=dateasc",
-			(0, false) => "manga/new",
-			(1, true) => "manga/new&n=favasc",
-			(1, false) => "mostfavorites&sort=manga",
-			(2, true) => "manga/new&n=abcdesc",
-			(2, false) => "manga/new&n=abcasc",
-			_ => "mostfavorites&sort=manga",
+		// Сайт убрал /manga/new и /mostfavorites — каталог теперь /manga с параметром n=.
+		let order = match (sort_index, ascending) {
+			(0, true) => "manga&n=dateasc",
+			(0, false) => "manga",
+			(1, true) => "manga&n=favasc",
+			(1, false) => "manga&n=favdesc",
+			(2, true) => "manga&n=abcdesc",
+			(2, false) => "manga&n=abcasc",
+			_ => "manga&n=favdesc",
 		};
-		format!("{BASE_URL}/{path}?offset={offset}")
+		format!("{BASE_URL}/{order}?offset={offset}")
 	}
 }
 
@@ -168,7 +169,11 @@ mod tests {
 	fn browse_url_uses_popularity_by_default() {
 		assert_eq!(
 			browse_url(2, 1, false, &[], &[]),
-			"https://xxl.hentaichan.live/mostfavorites&sort=manga?offset=20"
+			"https://xxl.hentaichan.live/manga&n=favdesc?offset=20"
+		);
+		assert_eq!(
+			browse_url(1, 0, false, &[], &[]),
+			"https://xxl.hentaichan.live/manga?offset=0"
 		);
 	}
 

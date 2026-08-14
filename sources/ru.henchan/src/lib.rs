@@ -150,7 +150,44 @@ impl HenChan {
 		}
 
 		let related_key = manga.key.replacen("/manga/", "/related/", 1);
-		let mut html = Request::get(format!("{BASE_URL}{related_key}"))?.html()?;
+		let mut html = match Request::get(format!("{BASE_URL}{related_key}"))?.html() {
+			Ok(html) => html,
+			// Сайт может не иметь /related/ для этого выпуска — один-единственный чейптер.
+			Err(_) => {
+				return Ok(Vec::from([Chapter {
+					key: manga.key.clone(),
+					title: Some(manga.title.clone()),
+					chapter_number: Some(1.0),
+					scanlators,
+					url: Some(format!("{BASE_URL}{}", manga.key)),
+					..Default::default()
+				}]));
+			}
+		};
+
+		// Сайт реорганизован: /related/ теперь может показывать «Хентай похожий на X»
+		// (похожие манги с ДРУГИМИ названиями), а не другие главы этой же манги.
+		// В этом случае у манги ровно один чейптер — она сама.
+		let related_text = html
+			.select_first("#right > div:nth-child(4)")
+			.and_then(|el| el.text())
+			.unwrap_or_default();
+		if related_text.contains(" похожий на ") {
+			let date_uploaded = html
+				.select_first(".row4_right b")
+				.and_then(|el| el.text())
+				.and_then(|date| parse_date_with_options(&date, "d MMMM yyyy", "ru_RU", "current"));
+			return Ok(Vec::from([Chapter {
+				key: manga.key.clone(),
+				title: Some(manga.title.clone()),
+				chapter_number: Some(1.0),
+				date_uploaded,
+				scanlators,
+				url: Some(format!("{BASE_URL}{}", manga.key)),
+				..Default::default()
+			}]));
+		}
+
 		let mut chapters = Self::related_chapters_from_document(&html);
 
 		while let Some(next_url) = html
@@ -304,7 +341,8 @@ impl ListingProvider for HenChan {
 		let offset = 20 * (page - 1);
 		let path = match listing.id.as_str() {
 			"latest" => "manga/newest",
-			"popular" => "mostfavorites",
+			// Сайт убрал /mostfavorites — по популярности теперь /manga&n=favdesc.
+			"popular" => "manga&n=favdesc",
 			_ => return Ok(MangaPageResult::default()),
 		};
 		Self::parse_manga_list(format!("{BASE_URL}/{path}?offset={offset}"))
