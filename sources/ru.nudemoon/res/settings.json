@@ -1,14 +1,14 @@
 [
 	{
 		"type": "group",
-		"title": "Куки вручную",
-		"footer": "Скопируйте cf_clearance и fusion_user из браузера (F12 → Storage → Cookies → nude-moon.org) в формате cf_clearance=ЗНАЧЕНИЕ; fusion_user=ЗНАЧЕНИЕ; fusion_visited=yes",
+		"title": "Токен вручную (рекомендуется)",
+		"footer": "Вставьте fusion_user из браузера (F12 → Storage → Cookies → nude-moon.org). Он не истекает и даёт доступ к закрытым тегам (юри и др.). Формат: fusion_user=ЗНАЧЕНИЕ",
 		"items": [
 			{
 				"type": "text",
 				"key": "manualCookies",
 				"title": "Cookies",
-				"placeholder": "cf_clearance=...; fusion_user=...; fusion_visited=yes"
+				"placeholder": "fusion_user=900784..."
 			}
 		]
 	},

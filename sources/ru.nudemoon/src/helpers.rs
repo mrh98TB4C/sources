@@ -28,15 +28,16 @@ pub fn browse_url(page: i32, sort_index: usize, genres: &[String]) -> String {
 			2 => "like",
 			_ => "views",
 		};
-		// Sort and pagination MUST follow `?` — OkHttp parses `&` in the path
-		// into a proper query string, but the raw URL we send does not.
+		// Verified via mitmproxy: the site serves tag pages at
+		// /tags/{slug}_&{sort}&rowstart={n} — tags joined by `_`,
+		// trailing `_` before sort params.
 		format!(
-			"{BASE_URL}/tags/{}+?{order}&rowstart={rowstart}",
+			"{BASE_URL}/tags/{}_&{order}&rowstart={rowstart}",
 			genres
 				.iter()
 				.map(|g| encode_uri_component(genre_slug(g)))
 				.collect::<Vec<_>>()
-				.join("+")
+				.join("_")
 		)
 	}
 }
@@ -123,10 +124,12 @@ fn cp1251_byte(c: char) -> Option<u8> {
 	}
 }
 
+#[allow(dead_code)]
 pub fn decode_cp1251(data: &[u8]) -> String {
 	data.iter().map(|&b| decode_cp1251_byte(b)).collect()
 }
 
+#[allow(dead_code)]
 fn decode_cp1251_byte(byte: u8) -> char {
 	match byte {
 		0x00..=0x7F => byte as char,
@@ -178,7 +181,7 @@ mod tests {
 		let genres = Vec::from([String::from("Без цензуры")]);
 		assert_eq!(
 			browse_url(1, 1, &genres),
-			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B+?views&rowstart=0"
+			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B_&views&rowstart=0"
 		);
 	}
 
@@ -206,7 +209,7 @@ mod tests {
 		let genres = Vec::from([String::from("без_цензуры"), String::from("x-ray")]);
 		assert_eq!(
 			browse_url(1, 0, &genres),
-			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B+x-ray+?date&rowstart=0"
+			"https://nude-moon.org/tags/%D0%B1%D0%B5%D0%B7_%D1%86%D0%B5%D0%BD%D0%B7%D1%83%D1%80%D1%8B_x-ray_&date&rowstart=0"
 		);
 	}
 

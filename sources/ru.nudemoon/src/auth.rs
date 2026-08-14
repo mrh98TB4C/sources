@@ -20,22 +20,40 @@ pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 }
 
 pub fn cookie_header() -> String {
+	// Сессия из WebView-логина содержит свежий cf_clearance — шлём его.
+	// fusion_user берём из сессии или ручного поля.
+	let session = defaults_get::<String>(SESSION_KEY).unwrap_or_default();
 	let manual = defaults_get::<String>("manualCookies").unwrap_or_default();
-	let session = if !manual.is_empty() {
-		manual
-	} else {
-		defaults_get::<String>(SESSION_KEY).unwrap_or_default()
-	};
-	format!("NMfYa=1; nm_mobile=1; {session}; Domain=nude-moon.org")
+	format!("NMfYa=1; nm_mobile=1; {session}; {manual}; Domain=nude-moon.org")
 }
 
 pub fn is_authorized() -> bool {
-	let session = defaults_get::<String>(SESSION_KEY).unwrap_or_default();
 	// fusion_user is the ONLY account auth cookie. userToken is set for
 	// anonymous visitors too, so it must not count as authorization.
-	session.contains("fusion_user=")
+	let session = defaults_get::<String>(SESSION_KEY).unwrap_or_default();
+	let manual = defaults_get::<String>("manualCookies").unwrap_or_default();
+	session.contains("fusion_user=") || manual.contains("fusion_user=")
 }
 
+/// Значение fusion_user из сессии или ручного поля (для вброса в WebView).
+#[allow(dead_code)]
+pub fn fusion_user() -> Option<String> {
+	let session = defaults_get::<String>(SESSION_KEY).unwrap_or_default();
+	let manual = defaults_get::<String>("manualCookies").unwrap_or_default();
+	for src in [session, manual] {
+		if let Some(pos) = src.find("fusion_user=") {
+			let rest = &src[pos + 12..];
+			let end = rest.find([';', ' ']).unwrap_or(rest.len());
+			let value = rest[..end].trim();
+			if !value.is_empty() {
+				return Some(value.into());
+			}
+		}
+	}
+	None
+}
+
+#[allow(dead_code)]
 pub fn clear_cloudflare() {}
 
 #[allow(dead_code)]

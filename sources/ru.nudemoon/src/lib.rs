@@ -35,17 +35,13 @@ impl Nudemoon {
 	fn get_html(url: String) -> Result<Document> {
 		let response = Self::request(url.clone())?.send()?;
 		let status = response.status_code();
-		// Aidoku handles Cloudflare in a WebView and stores cf_clearance in shared cookies.
-		// If it still returns a challenge, surface an actionable error instead of parsing it.
-		if Self::is_cloudflare_challenge(status, response.get_header("cf-mitigated")) {
-			auth::clear_cloudflare();
-			bail!("Cloudflare verification required. Complete the WebView challenge and try again");
+		let cf = response.get_header("cf-mitigated");
+		if Self::is_cloudflare_challenge(status, cf) {
+			bail!("Cloudflare проверка не пройдена. Откройте Настройки источника → «Войти через WebView» → пройдите проверку → закройте WebView (куки обновятся ~30 минут)");
 		}
 		if status >= 400 {
 			bail!("Nude-Moon HTTP error {status}");
 		}
-		// Site returns windows-1251, which Aidoku cannot decode natively.
-		// Decode manually and parse with the original URL as base.
 		let data = response.get_data()?;
 		let html_str = helpers::decode_cp1251(&data);
 		Ok(Html::parse_with_url(&html_str, &url)?)
@@ -451,7 +447,13 @@ impl WebLoginHandler for Nudemoon {
 		if key != "login" {
 			bail!("Invalid login key: `{key}`");
 		}
-		Ok(auth::save_cookies(&cookies))
+		let keys: Vec<String> = cookies.keys().cloned().collect();
+		println!("nm webview login: {} cookies: {:?}", cookies.len(), keys);
+		// ВСЕГДА сохраняем куки (cf_clearance нужен сразу).
+		auth::save_cookies(&cookies);
+		// Возвращаем true ТОЛЬКО когда реально залогинены — иначе Aidoku
+		// закрывает WebView сразу после загрузки страницы и логин невозможен.
+		Ok(cookies.contains_key("fusion_user"))
 	}
 }
 
