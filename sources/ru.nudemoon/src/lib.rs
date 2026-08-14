@@ -447,8 +447,6 @@ impl WebLoginHandler for Nudemoon {
 		if key != "login" {
 			bail!("Invalid login key: `{key}`");
 		}
-		let keys: Vec<String> = cookies.keys().cloned().collect();
-		println!("nm webview login: {} cookies: {:?}", cookies.len(), keys);
 		// ВСЕГДА сохраняем куки (cf_clearance нужен сразу).
 		auth::save_cookies(&cookies);
 		// Возвращаем true ТОЛЬКО когда реально залогинены — иначе Aidoku
