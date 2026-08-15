@@ -33,11 +33,19 @@ impl Nudemoon {
 	}
 
 	fn get_html(url: String) -> Result<Document> {
+		// Не делаем голых запросов без свежего clearance: они всегда 403-ятся,
+		// что запускает авто-челлендж Aidoku — цикл поп-апов и краш приложения.
+		// Вместо этого сразу просим открыть логин-WebView.
+		if !auth::clearance_is_fresh() {
+			bail!(
+				"Cloudflare: откройте Настройки источника → «Войти через WebView» → дождитесь полной загрузки страницы (челлендж пройдёт сам) → закройте WebView → вернитесь в каталог"
+			);
+		}
 		let response = Self::request(url.clone())?.send()?;
 		let status = response.status_code();
 		let cf = response.get_header("cf-mitigated");
 		if Self::is_cloudflare_challenge(status, cf) {
-			bail!("Cloudflare проверка не пройдена. Откройте Настройки источника → «Войти через WebView» → пройдите проверку → закройте WebView (куки обновятся ~30 минут)");
+			bail!("Cloudflare проверка не пройдена. Откройте Настройки источника → «Войти через WebView» → дождитесь загрузки страницы → закройте WebView");
 		}
 		if status >= 400 {
 			bail!("Nude-Moon HTTP error {status}");
@@ -449,9 +457,12 @@ impl WebLoginHandler for Nudemoon {
 		}
 		// ВСЕГДА сохраняем куки (cf_clearance нужен сразу).
 		auth::save_cookies(&cookies);
-		// Возвращаем true ТОЛЬКО когда реально залогинены — иначе Aidoku
-		// закрывает WebView сразу после загрузки страницы и логин невозможен.
-		Ok(cookies.contains_key("fusion_user"))
+		let mut names: Vec<&str> = cookies.keys().map(|s| s.as_str()).collect();
+		names.sort_unstable();
+		println!("nm webview login: {} cookies: {:?}", cookies.len(), names);
+		// Возвращаем true когда залогинены И clearance получен — иначе WebView
+		// закроется до решения челленджа, и источник останется на паузе.
+		Ok(cookies.contains_key("fusion_user") && cookies.contains_key("cf_clearance"))
 	}
 }
 

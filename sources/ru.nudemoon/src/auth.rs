@@ -17,16 +17,25 @@ const FORWARD_COOKIES: [&str; 2] = ["fusion_user", "cf_clearance"];
 
 pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 	let mut all: Vec<String> = Vec::new();
+	let mut new_clearance = false;
 	for name in FORWARD_COOKIES {
 		if let Some(value) = cookies.get(name).filter(|v| !v.is_empty()) {
 			all.push(format!("{name}={value}"));
+			if name == "cf_clearance" {
+				// Сайт выдаёт новый токен при каждом челлендже; тот же токен = протухший.
+				new_clearance = session_value("cf_clearance").as_deref() != Some(value.as_str());
+			}
 		}
 	}
 	if all.is_empty() {
 		return false;
 	}
 	defaults_set(SESSION_KEY, DefaultValue::String(all.join("; ")));
-	defaults_set(SESSION_TS_KEY, DefaultValue::Int(current_date() as i32));
+	// Метку времени обновляем только если clearance реально новый — иначе
+	// протухший токен с новой меткой прорвётся в запрос и снова 403.
+	if new_clearance {
+		defaults_set(SESSION_TS_KEY, DefaultValue::Int(current_date() as i32));
+	}
 	true
 }
 
@@ -49,15 +58,13 @@ pub fn cookie_header() -> String {
 		header.push_str("; fusion_user=");
 		header.push_str(&fu);
 	}
-
 	// cf_clearance только если свежий (получен из WebView недавно).
 	// Протухший не шлём: он вызывает вечный челлендж-цикл.
-	if let Some(clearance) = session_value("cf_clearance") {
-		let saved_at = defaults_get::<i32>(SESSION_TS_KEY).unwrap_or(0) as i64;
-		if current_date() - saved_at < CLEARANCE_MAX_AGE_SECS as i64 {
-			header.push_str("; cf_clearance=");
-			header.push_str(&clearance);
-		}
+	if clearance_is_fresh()
+		&& let Some(clearance) = session_value("cf_clearance")
+	{
+		header.push_str("; cf_clearance=");
+		header.push_str(&clearance);
 	}
 
 	let manual = defaults_get::<String>("manualCookies").unwrap_or_default();
@@ -68,6 +75,17 @@ pub fn cookie_header() -> String {
 
 	header.push_str("; Domain=nude-moon.org");
 	header
+}
+
+/// Свежий ли cf_clearance в сессии. Источник не делает HTML-запросов без
+/// свежего clearance: голый запрос 403-ится, что запускает авто-челлендж
+/// Aidoku (поп-ап, цикл, краш приложения). Пауза безопаснее.
+pub fn clearance_is_fresh() -> bool {
+	if session_value("cf_clearance").is_none() {
+		return false;
+	}
+	let saved_at = defaults_get::<i32>(SESSION_TS_KEY).unwrap_or(0) as i64;
+	current_date() - saved_at < CLEARANCE_MAX_AGE_SECS as i64
 }
 
 pub fn is_authorized() -> bool {
@@ -141,6 +159,25 @@ mod tests {
 		assert!(!header.contains("cf_clearance"));
 		assert!(header.contains("fusion_user=fu"));
 		assert!(header.contains("Domain=nude-moon.org"));
+	}
+
+	#[aidoku_test]
+	fn save_cookies_does_not_refresh_ts_for_same_clearance() {
+		let mut c = HashMap::new();
+		c.insert(String::from("cf_clearance"), String::from("tok1"));
+		save_cookies(&c);
+		defaults_set(SESSION_TS_KEY, DefaultValue::Int(current_date() as i32 - 3600));
+		assert!(!clearance_is_fresh());
+		// Повторная доставка того же токена не должна оживить метку
+		let mut c2 = HashMap::new();
+		c2.insert(String::from("cf_clearance"), String::from("tok1"));
+		save_cookies(&c2);
+		assert!(!clearance_is_fresh());
+		// Новый токен — оживляет
+		let mut c3 = HashMap::new();
+		c3.insert(String::from("cf_clearance"), String::from("tok2"));
+		save_cookies(&c3);
+		assert!(clearance_is_fresh());
 	}
 
 	#[aidoku_test]
