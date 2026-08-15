@@ -27,6 +27,13 @@ pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 			}
 		}
 	}
+	// Анонимная доставка (страница грузится без логина) не должна стирать
+	// fusion_user из сессии: сохраняем прежний, если в новой доставке его нет.
+	if !cookies.contains_key("fusion_user") {
+		if let Some(old_fu) = session_value("fusion_user") {
+			all.push(format!("fusion_user={old_fu}"));
+		}
+	}
 	if all.is_empty() {
 		return false;
 	}
