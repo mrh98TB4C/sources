@@ -6,10 +6,6 @@ use aidoku::{
 };
 
 const SESSION_KEY: &str = "session";
-const SESSION_TS_KEY: &str = "session_ts";
-/// cf_clearance протухает на сервере за ~30 минут; шлём только свежий.
-/// Протухший отравляет запрос: CF режет его даже при живом clearance в хранилище Aidoku.
-const CLEARANCE_MAX_AGE_SECS: i32 = 20 * 60;
 
 /// Куки, которые мы вообще пересылаем в запросах. Остальное (_ga, _gid,
 /// cf_chl_rc_ni, fusion_visited) — мусор, только шумит и ломает челленджи.
@@ -17,14 +13,9 @@ const FORWARD_COOKIES: [&str; 2] = ["fusion_user", "cf_clearance"];
 
 pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 	let mut all: Vec<String> = Vec::new();
-	let mut new_clearance = false;
 	for name in FORWARD_COOKIES {
 		if let Some(value) = cookies.get(name).filter(|v| !v.is_empty()) {
 			all.push(format!("{name}={value}"));
-			if name == "cf_clearance" {
-				// Сайт выдаёт новый токен при каждом челлендже; тот же токен = протухший.
-				new_clearance = session_value("cf_clearance").as_deref() != Some(value.as_str());
-			}
 		}
 	}
 	// Анонимная доставка (страница грузится без логина) не должна стирать
@@ -38,11 +29,6 @@ pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 		return false;
 	}
 	defaults_set(SESSION_KEY, DefaultValue::String(all.join("; ")));
-	// Метку времени обновляем только если clearance реально новый — иначе
-	// протухший токен с новой меткой прорвётся в запрос и снова 403.
-	if new_clearance {
-		defaults_set(SESSION_TS_KEY, DefaultValue::Int(current_date() as i32));
-	}
 	true
 }
 
@@ -58,6 +44,11 @@ fn session_value(name: &str) -> Option<String> {
 	None
 }
 
+/// Время выдачи cf_clearance, вшитое CF в токен: `TOKEN-<unix>-1.2.1.1-...`
+fn clearance_issued_at(value: &str) -> Option<i64> {
+	value.split('-').nth(1)?.parse().ok()
+}
+
 pub fn cookie_header() -> String {
 	let mut header = String::from("NMfYa=1; nm_mobile=1");
 
@@ -66,11 +57,7 @@ pub fn cookie_header() -> String {
 		header.push_str(&fu);
 	}
 
-	// cf_clearance только если свежий (получен из WebView недавно).
-	// Протухший не шлём: он вызывает вечный челлендж-цикл.
-	if clearance_is_fresh()
-		&& let Some(clearance) = session_value("cf_clearance")
-	{
+	if let Some(clearance) = session_value("cf_clearance") {
 		header.push_str("; cf_clearance=");
 		header.push_str(&clearance);
 	}
@@ -79,15 +66,12 @@ pub fn cookie_header() -> String {
 	header
 }
 
-/// Свежий ли cf_clearance в сессии. Источник не делает HTML-запросов без
-/// свежего clearance: голый запрос 403-ится, что запускает авто-челлендж
-/// Aidoku (поп-ап, цикл, краш приложения). Пауза безопаснее.
-pub fn clearance_is_fresh() -> bool {
-	if session_value("cf_clearance").is_none() {
-		return false;
-	}
-	let saved_at = defaults_get::<i32>(SESSION_TS_KEY).unwrap_or(0) as i64;
-	current_date() - saved_at < CLEARANCE_MAX_AGE_SECS as i64
+/// Есть ли в сессии cf_clearance. Источник не делает HTML-запросов без
+/// clearance вообще: голый запрос гарантированно 403-ится, что запускает
+/// авто-челлендж Aidoku (поп-ап, цикл, краш приложения). Возраст токена
+/// валидирует сам сайт — если протух, получим один 403, после чего пауза.
+pub fn has_clearance() -> bool {
+	session_value("cf_clearance").is_some()
 }
 
 pub fn is_authorized() -> bool {
@@ -96,21 +80,22 @@ pub fn is_authorized() -> bool {
 	session_value("fusion_user").is_some()
 }
 
-/// Диагностика паузы: что в сессии и сколько времени прошло.
+/// Диагностика: что в сессии, сколько времени токену (по вшитой CF метке).
 pub fn diag() -> String {
 	let clearance = session_value("cf_clearance")
 		.map(|c| c.chars().take(12).collect::<String>())
 		.unwrap_or_else(|| String::from("none"));
-	let ts = defaults_get::<i32>(SESSION_TS_KEY).unwrap_or(0) as i64;
-	let age = if ts == 0 { -1 } else { current_date() - ts };
+	let age = session_value("cf_clearance")
+		.and_then(|c| clearance_issued_at(&c))
+		.map(|issued| current_date() - issued)
+		.unwrap_or(-1);
 	let auth = if session_value("fusion_user").is_some() { "yes" } else { "no" };
-	format!("session(auth={auth}, clearance={clearance}, age={age}s, fresh={})", clearance_is_fresh())
+	format!("session(auth={auth}, clearance={clearance}, token_age={age}s)")
 }
 
 #[allow(dead_code)] // только для тестов; логаут управляется самим Aidoku
 pub fn clear_auth() {
 	defaults_set(SESSION_KEY, DefaultValue::String(String::new()));
-	defaults_set(SESSION_TS_KEY, DefaultValue::Int(0));
 }
 
 #[cfg(test)]
@@ -171,45 +156,32 @@ mod tests {
 	}
 
 	#[aidoku_test]
-	fn cookie_header_drops_stale_clearance_keeps_auth() {
+	fn cookie_header_sends_clearance_regardless_of_age() {
 		let mut c = HashMap::new();
 		c.insert(String::from("cf_clearance"), String::from("oldcf"));
 		c.insert(String::from("fusion_user"), String::from("fu"));
 		save_cookies(&c);
-		// состариваем метку: будто clearance получен час назад
-		defaults_set(SESSION_TS_KEY, DefaultValue::Int(current_date() as i32 - 3600));
 		let header = cookie_header();
-		assert!(!header.contains("cf_clearance"));
+		assert!(header.contains("cf_clearance=oldcf"));
 		assert!(header.contains("fusion_user=fu"));
 		assert!(header.contains("Domain=nude-moon.org"));
 	}
 
 	#[aidoku_test]
-	fn save_cookies_does_not_refresh_ts_for_same_clearance() {
-		let mut c = HashMap::new();
-		c.insert(String::from("cf_clearance"), String::from("tok1"));
-		save_cookies(&c);
-		defaults_set(SESSION_TS_KEY, DefaultValue::Int(current_date() as i32 - 3600));
-		assert!(!clearance_is_fresh());
-		// Повторная доставка того же токена не должна оживить метку
-		let mut c2 = HashMap::new();
-		c2.insert(String::from("cf_clearance"), String::from("tok1"));
-		save_cookies(&c2);
-		assert!(!clearance_is_fresh());
-		// Новый токен — оживляет
-		let mut c3 = HashMap::new();
-		c3.insert(String::from("cf_clearance"), String::from("tok2"));
-		save_cookies(&c3);
-		assert!(clearance_is_fresh());
+	fn clearance_issued_at_reads_embedded_timestamp() {
+		let tok = "abc.xyz-1786775925-1.2.1.1-nonce";
+		assert_eq!(clearance_issued_at(tok), Some(1786775925));
+		assert_eq!(clearance_issued_at("garbage"), None);
 	}
 
 	#[aidoku_test]
-	fn cookie_header_includes_fresh_clearance() {
+	fn has_clearance_reflects_session() {
+		clear_auth();
+		assert!(!has_clearance());
 		let mut c = HashMap::new();
-		c.insert(String::from("cf_clearance"), String::from("freshcf"));
+		c.insert(String::from("cf_clearance"), String::from("cf"));
 		save_cookies(&c);
-		let header = cookie_header();
-		assert!(header.contains("cf_clearance=freshcf"));
+		assert!(has_clearance());
 	}
 
 	#[aidoku_test]
