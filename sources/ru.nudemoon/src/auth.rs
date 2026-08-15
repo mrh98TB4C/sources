@@ -29,10 +29,10 @@ pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 	}
 	// Анонимная доставка (страница грузится без логина) не должна стирать
 	// fusion_user из сессии: сохраняем прежний, если в новой доставке его нет.
-	if !cookies.contains_key("fusion_user") {
-		if let Some(old_fu) = session_value("fusion_user") {
-			all.push(format!("fusion_user={old_fu}"));
-		}
+	if !cookies.contains_key("fusion_user")
+		&& let Some(old_fu) = session_value("fusion_user")
+	{
+		all.push(format!("fusion_user={old_fu}"));
 	}
 	if all.is_empty() {
 		return false;
@@ -65,6 +65,7 @@ pub fn cookie_header() -> String {
 		header.push_str("; fusion_user=");
 		header.push_str(&fu);
 	}
+
 	// cf_clearance только если свежий (получен из WebView недавно).
 	// Протухший не шлём: он вызывает вечный челлендж-цикл.
 	if clearance_is_fresh()
@@ -72,12 +73,6 @@ pub fn cookie_header() -> String {
 	{
 		header.push_str("; cf_clearance=");
 		header.push_str(&clearance);
-	}
-
-	let manual = defaults_get::<String>("manualCookies").unwrap_or_default();
-	if !manual.is_empty() {
-		header.push_str("; ");
-		header.push_str(&manual);
 	}
 
 	header.push_str("; Domain=nude-moon.org");
@@ -99,9 +94,17 @@ pub fn is_authorized() -> bool {
 	// fusion_user is the ONLY account auth cookie. userToken is set for
 	// anonymous visitors too, so it must not count as authorization.
 	session_value("fusion_user").is_some()
-		|| defaults_get::<String>("manualCookies")
-			.unwrap_or_default()
-			.contains("fusion_user=")
+}
+
+/// Диагностика паузы: что в сессии и сколько времени прошло.
+pub fn diag() -> String {
+	let clearance = session_value("cf_clearance")
+		.map(|c| c.chars().take(12).collect::<String>())
+		.unwrap_or_else(|| String::from("none"));
+	let ts = defaults_get::<i32>(SESSION_TS_KEY).unwrap_or(0) as i64;
+	let age = if ts == 0 { -1 } else { current_date() - ts };
+	let auth = if session_value("fusion_user").is_some() { "yes" } else { "no" };
+	format!("session(auth={auth}, clearance={clearance}, age={age}s, fresh={})", clearance_is_fresh())
 }
 
 #[allow(dead_code)] // только для тестов; логаут управляется самим Aidoku
@@ -128,6 +131,19 @@ mod tests {
 		assert!(!defaults_get::<String>(SESSION_KEY)
 			.unwrap_or_default()
 			.contains("_ga"));
+	}
+
+	#[aidoku_test]
+	fn anonymous_delivery_keeps_existing_fusion_user() {
+		clear_auth();
+		let mut c = HashMap::new();
+		c.insert(String::from("fusion_user"), String::from("fu"));
+		save_cookies(&c);
+		// анонимная доставка: только clearance
+		let mut anon = HashMap::new();
+		anon.insert(String::from("cf_clearance"), String::from("cf2"));
+		save_cookies(&anon);
+		assert!(is_authorized());
 	}
 
 	#[aidoku_test]
@@ -188,14 +204,12 @@ mod tests {
 	}
 
 	#[aidoku_test]
-	fn cookie_header_includes_fresh_clearance_and_manual() {
+	fn cookie_header_includes_fresh_clearance() {
 		let mut c = HashMap::new();
 		c.insert(String::from("cf_clearance"), String::from("freshcf"));
 		save_cookies(&c);
-		defaults_set("manualCookies", DefaultValue::String(String::from("fusion_user=mfu")));
 		let header = cookie_header();
 		assert!(header.contains("cf_clearance=freshcf"));
-		assert!(header.contains("fusion_user=mfu"));
 	}
 
 	#[aidoku_test]

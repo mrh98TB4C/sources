@@ -1,19 +1,6 @@
 [
 	{
 		"type": "group",
-		"title": "Токен вручную (рекомендуется)",
-		"footer": "Вставьте fusion_user из браузера (F12 → Storage → Cookies → nude-moon.org). Он не истекает и даёт доступ к закрытым тегам (юри и др.). Формат: fusion_user=ЗНАЧЕНИЕ",
-		"items": [
-			{
-				"type": "text",
-				"key": "manualCookies",
-				"title": "Cookies",
-				"placeholder": "fusion_user=900784..."
-			}
-		]
-	},
-	{
-		"type": "group",
 		"title": "Аккаунт и Cloudflare",
 		"footer": "Откройте WebView, пройдите Cloudflare и при необходимости войдите в аккаунт.",
 		"items": [

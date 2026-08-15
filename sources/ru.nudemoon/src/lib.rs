@@ -37,6 +37,7 @@ impl Nudemoon {
 		// что запускает авто-челлендж Aidoku — цикл поп-апов и краш приложения.
 		// Вместо этого сразу просим открыть логин-WebView.
 		if !auth::clearance_is_fresh() {
+			println!("nm pause: {}", auth::diag());
 			bail!(
 				"Cloudflare: откройте Настройки источника → «Войти через WebView» → дождитесь полной загрузки страницы (челлендж пройдёт сам) → закройте WebView → вернитесь в каталог"
 			);
@@ -457,9 +458,18 @@ impl WebLoginHandler for Nudemoon {
 		}
 		// ВСЕГДА сохраняем куки (cf_clearance нужен сразу).
 		auth::save_cookies(&cookies);
-		let mut names: Vec<&str> = cookies.keys().map(|s| s.as_str()).collect();
-		names.sort_unstable();
-		println!("nm webview login: {} cookies: {:?}", cookies.len(), names);
+		let mut names: Vec<String> = cookies
+			.keys()
+			.map(|k| {
+				if k == "cf_clearance" {
+					format!("cf_clearance={}…", cookies[k].chars().take(10).collect::<String>())
+				} else {
+					k.clone()
+				}
+			})
+			.collect();
+		names.sort();
+		println!("nm webview login: {:?} -> {}", names, auth::diag());
 		// Возвращаем true когда залогинены И clearance получен — иначе WebView
 		// закроется до решения челленджа, и источник останется на паузе.
 		Ok(cookies.contains_key("fusion_user") && cookies.contains_key("cf_clearance"))
