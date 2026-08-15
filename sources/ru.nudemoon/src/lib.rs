@@ -456,7 +456,10 @@ impl WebLoginHandler for Nudemoon {
 		if key != "login" {
 			bail!("Invalid login key: `{key}`");
 		}
-		// ВСЕГДА сохраняем куки (cf_clearance нужен сразу).
+		// Новый ли clearance пришёл — сравнить ДО сохранения.
+		let new_clearance = cookies
+			.get("cf_clearance")
+			.is_some_and(|new| auth::stored_clearance().as_deref() != Some(new.as_str()));
 		auth::save_cookies(&cookies);
 		let mut names: Vec<String> = cookies
 			.keys()
@@ -469,10 +472,11 @@ impl WebLoginHandler for Nudemoon {
 			})
 			.collect();
 		names.sort();
-		println!("nm webview login: {:?} -> {}", names, auth::diag());
-		// Возвращаем true когда залогинены И clearance получен — иначе WebView
-		// закроется до решения челленджа, и источник останется на паузе.
-		Ok(cookies.contains_key("fusion_user") && cookies.contains_key("cf_clearance"))
+		println!("nm webview login: {:?} -> {} (new={})", names, auth::diag(), new_clearance);
+		// Закрываем WebView только когда пришёл НОВЫЙ clearance (челлендж внутри
+		// WebView завершился) и есть fusion_user. Иначе WebView закроется раньше,
+		// чем CF выдаст новый токен, и источник останется со старым.
+		Ok(cookies.contains_key("fusion_user") && new_clearance)
 	}
 }
 

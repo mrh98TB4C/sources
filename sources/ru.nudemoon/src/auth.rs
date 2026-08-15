@@ -66,6 +66,11 @@ pub fn cookie_header() -> String {
 	header
 }
 
+/// Токен cf_clearance из сессии (для сравнения с доставкой).
+pub fn stored_clearance() -> Option<String> {
+	session_value("cf_clearance")
+}
+
 /// Есть ли в сессии cf_clearance. Источник не делает HTML-запросов без
 /// clearance вообще: голый запрос гарантированно 403-ится, что запускает
 /// авто-челлендж Aidoku (поп-ап, цикл, краш приложения). Возраст токена
