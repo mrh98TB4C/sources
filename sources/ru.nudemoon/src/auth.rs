@@ -6,6 +6,7 @@ use aidoku::{
 };
 
 const SESSION_KEY: &str = "session";
+const CF_BLOCKED_KEY: &str = "cf_blocked";
 
 /// Куки, которые мы вообще пересылаем в запросах. Остальное (_ga, _gid,
 /// cf_chl_rc_ni, fusion_visited) — мусор, только шумит и ломает челленджи.
@@ -29,6 +30,8 @@ pub fn save_cookies(cookies: &HashMap<String, String>) -> bool {
 		return false;
 	}
 	defaults_set(SESSION_KEY, DefaultValue::String(all.join("; ")));
+	// WebView побывал на сайте — если стояла пост-403 пауза, снимаем.
+	clear_cf_blocked();
 	true
 }
 
@@ -71,10 +74,24 @@ pub fn stored_clearance() -> Option<String> {
 	session_value("cf_clearance")
 }
 
+/// После 403 от CF не делаем новых запросов — каждый голый запрос запускает
+/// авто-челлендж Aidoku (поп-ап, повторы, краш). Пауза до доставки кук из WebView.
+pub fn set_cf_blocked() {
+	defaults_set(CF_BLOCKED_KEY, DefaultValue::Int(current_date() as i32));
+}
+
+pub fn clear_cf_blocked() {
+	defaults_set(CF_BLOCKED_KEY, DefaultValue::Int(0));
+}
+
+pub fn is_cf_blocked() -> bool {
+	defaults_get::<i32>(CF_BLOCKED_KEY).unwrap_or(0) != 0
+}
+
 /// Есть ли в сессии cf_clearance. Источник не делает HTML-запросов без
 /// clearance вообще: голый запрос гарантированно 403-ится, что запускает
-/// авто-челлендж Aidoku (поп-ап, цикл, краш приложения). Возраст токена
-/// валидирует сам сайт — если протух, получим один 403, после чего пауза.
+/// авто-челлендж Aidoku. Возраст токена валидирует сам сайт — если протух,
+/// получим один 403, после чего пост-пауза.
 pub fn has_clearance() -> bool {
 	session_value("cf_clearance").is_some()
 }
@@ -101,6 +118,7 @@ pub fn diag() -> String {
 #[allow(dead_code)] // только для тестов; логаут управляется самим Aidoku
 pub fn clear_auth() {
 	defaults_set(SESSION_KEY, DefaultValue::String(String::new()));
+	defaults_set(CF_BLOCKED_KEY, DefaultValue::Int(0));
 }
 
 #[cfg(test)]
@@ -187,6 +205,17 @@ mod tests {
 		c.insert(String::from("cf_clearance"), String::from("cf"));
 		save_cookies(&c);
 		assert!(has_clearance());
+	}
+
+	#[aidoku_test]
+	fn cf_blocked_flag_clears_on_delivery() {
+		clear_auth();
+		set_cf_blocked();
+		assert!(is_cf_blocked());
+		let mut c = HashMap::new();
+		c.insert(String::from("cf_clearance"), String::from("cf"));
+		save_cookies(&c);
+		assert!(!is_cf_blocked());
 	}
 
 	#[aidoku_test]

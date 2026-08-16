@@ -33,20 +33,27 @@ impl Nudemoon {
 	}
 
 	fn get_html(url: String) -> Result<Document> {
-		// Не делаем голых запросов без свежего clearance: они всегда 403-ятся,
-		// что запускает авто-челлендж Aidoku — цикл поп-апов и краш приложения.
-		// Вместо этого сразу просим открыть логин-WebView.
+		// Пост-403 пауза: после одного челленджа не дёргаем сайт повторно,
+		// пока пользователь не сходит в WebView (каждый голой запрос запускает
+		// авто-челлендж Aidoku — поп-апы, повторы, краш).
+		if auth::is_cf_blocked() {
+			bail!(
+				"Cloudflare: откройте Настройки источника → «Войти через WebView» → дождитесь закрытия WebView → вернитесь в каталог"
+			);
+		}
+		// Голый запрос без clearance тоже не делаем — по той же причине.
 		if !auth::has_clearance() {
 			println!("nm pause: {}", auth::diag());
 			bail!(
-				"Cloudflare: откройте Настройки источника → «Войти через WebView» → дождитесь полной загрузки страницы (челлендж пройдёт сам) → закройте WebView → вернитесь в каталог"
+				"Cloudflare: откройте Настройки источника → «Войти через WebView» → дождитесь закрытия WebView → вернитесь в каталог"
 			);
 		}
 		let response = Self::request(url.clone())?.send()?;
 		let status = response.status_code();
 		let cf = response.get_header("cf-mitigated");
 		if Self::is_cloudflare_challenge(status, cf) {
-			bail!("Cloudflare проверка не пройдена. Откройте Настройки источника → «Войти через WebView» → дождитесь загрузки страницы → закройте WebView");
+			auth::set_cf_blocked();
+			bail!("Cloudflare: токен устарел. Откройте Настройки источника → «Войти через WebView» — WebView закроется сам после обновления токена");
 		}
 		if status >= 400 {
 			bail!("Nude-Moon HTTP error {status}");
@@ -355,31 +362,40 @@ impl Source for Nudemoon {
 			if let Some(query) = query.filter(|query| !query.trim().is_empty()) {
 				(helpers::search_url(&query, page), false)
 			} else {
-				let mut sort_index = 1usize;
-				let mut genres: Vec<String> = Vec::new();
-				for filter in filters {
-					match filter {
-						FilterValue::Sort { id, index, .. } if id == "sort" => {
-							sort_index = index as usize;
-						}
-						FilterValue::MultiSelect {
-							id,
-							included,
-							excluded: _,
-						} if id == "genre" => {
-							genres = included;
-						}
-						// Tag tap from manga details: single genre via select filter
-						FilterValue::Select { id, value } if id == "genre" => {
-							genres = vec![value];
-						}
-						_ => {}
+			let mut sort_index = 1usize;
+			let mut genres: Vec<String> = Vec::new();
+			let mut tapped: Option<String> = None;
+			println!("nm filters: {:?}", filters);
+			for filter in filters {
+				match filter {
+					FilterValue::Sort { id, index, .. } if id == "sort" => {
+						sort_index = index as usize;
 					}
+					FilterValue::MultiSelect {
+						id,
+						included,
+						excluded: _,
+					} if id == "genre" => {
+						genres = included;
+					}
+					// Tag tap from manga details: single genre via select filter
+					FilterValue::Select { id, value } if id == "genre" => {
+						tapped = Some(value);
+					}
+					_ => {}
 				}
-				let tag_filtered = !genres.is_empty();
-				(helpers::browse_url(page, sort_index, &genres), tag_filtered)
-			};
-
+			}
+			// Если открыли панель фильтров после тапа по тегу, Aidoku может
+			// прислать и Select (тап), и MultiSelect (панель). Панель новее —
+			// она выигрывает. Select берём только когда MultiSelect пуст.
+			if genres.is_empty()
+				&& let Some(value) = tapped
+			{
+				genres = vec![value];
+			}
+			let tag_filtered = !genres.is_empty();
+			(helpers::browse_url(page, sort_index, &genres), tag_filtered)
+		};
 		let result = Self::parse_manga_list(url)?;
 		// Some tags (e.g. юри) return an empty listing for anonymous users.
 		if result.entries.is_empty() && tag_filtered && !auth::is_authorized() {
