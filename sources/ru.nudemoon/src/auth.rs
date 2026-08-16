@@ -105,7 +105,8 @@ pub fn clearance_is_usable() -> bool {
 	}
 }
 
-/// Есть ли в сессии cf_clearance (без учёта возраста).
+/// Есть ли в сессии cf_clearance (без учёта возраста). Используется в тестах.
+#[allow(dead_code)]
 pub fn has_clearance() -> bool {
 	session_value("cf_clearance").is_some()
 }
