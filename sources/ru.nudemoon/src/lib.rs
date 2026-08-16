@@ -42,7 +42,7 @@ impl Nudemoon {
 			);
 		}
 		// Голый запрос без clearance тоже не делаем — по той же причине.
-		if !auth::has_clearance() {
+		if !auth::clearance_is_usable() {
 			println!("nm pause: {}", auth::diag());
 			bail!(
 				"Cloudflare: откройте Настройки источника → «Войти через WebView» → дождитесь закрытия WebView → вернитесь в каталог"

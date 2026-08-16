@@ -88,12 +88,21 @@ pub fn is_cf_blocked() -> bool {
 	defaults_get::<i32>(CF_BLOCKED_KEY).unwrap_or(0) != 0
 }
 
-/// Есть ли в сессии cf_clearance. Источник не делает HTML-запросов без
-/// clearance вообще: голый запрос гарантированно 403-ится, что запускает
-/// авто-челлендж Aidoku. Возраст токена валидирует сам сайт — если протух,
-/// получим один 403, после чего пост-пауза.
-pub fn has_clearance() -> bool {
-	session_value("cf_clearance").is_some()
+/// Возраст cf_clearance, вшитый в сам токен, надёжнее нашей метки времени
+/// (дефолты источника стираются при обновлениях). Токен старше порога
+/// не отправляем: сайт всё равно 403-нет, а каждый 403 запускает
+/// авто-челлендж Aidoku (поп-апы, краш).
+const CLEARANCE_MAX_AGE_SECS: i64 = 25 * 60;
+
+pub fn clearance_is_usable() -> bool {
+	match session_value("cf_clearance") {
+		None => false,
+		Some(c) => match clearance_issued_at(&c) {
+			Some(issued) => current_date() - issued < CLEARANCE_MAX_AGE_SECS,
+			// Токен без вшитой метки — отправляем: хуже один 403, чем вечный стоп.
+			None => true,
+		},
+	}
 }
 
 pub fn is_authorized() -> bool {
@@ -198,13 +207,23 @@ mod tests {
 	}
 
 	#[aidoku_test]
-	fn has_clearance_reflects_session() {
+	fn clearance_usable_by_embedded_age() {
 		clear_auth();
-		assert!(!has_clearance());
+		assert!(!clearance_is_usable()); // нет токена
+		let fresh = format!("tok-{}-1.2.1.1-nonce", current_date());
 		let mut c = HashMap::new();
-		c.insert(String::from("cf_clearance"), String::from("cf"));
+		c.insert(String::from("cf_clearance"), fresh);
 		save_cookies(&c);
-		assert!(has_clearance());
+		assert!(clearance_is_usable()); // свежий токен
+		let old = format!("tok-{}-1.2.1.1-nonce", current_date() - 3600);
+		let mut c2 = HashMap::new();
+		c2.insert(String::from("cf_clearance"), old);
+		save_cookies(&c2);
+		assert!(!clearance_is_usable()); // часовой токен не отправляем
+		let mut c3 = HashMap::new();
+		c3.insert(String::from("cf_clearance"), String::from("no-timestamp"));
+		save_cookies(&c3);
+		assert!(clearance_is_usable()); // без метки — отправляем
 	}
 
 	#[aidoku_test]
