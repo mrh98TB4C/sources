@@ -41,8 +41,28 @@ impl Nudemoon {
 				"Cloudflare: откройте Настройки источника → «Войти через WebView» → дождитесь закрытия WebView → вернитесь в каталог"
 			);
 		}
-		// Голый запрос без clearance тоже не делаем — по той же причине.
+		// Токен старше порога — не выбрасываем сразу: проверяем одним запросом.
+		// Паузу включаем ДО пробы: конкурентные вызовы (обновление библиотеки)
+		// увидят её и не полетят голыми (шторм 403 = шторм поп-апов = краш).
 		if !auth::clearance_is_usable() {
+			if auth::has_clearance() {
+				auth::set_cf_blocked();
+				let response = Self::request(url.clone())?.send()?;
+				let status = response.status_code();
+				let cf = response.get_header("cf-mitigated");
+				if Self::is_cloudflare_challenge(status, cf) {
+					println!("nm probe: token expired on server, pausing");
+					bail!("Cloudflare: токен истёк. Откройте Настройки источника → «Войти через WebView» — WebView закроется сам после обновления токена");
+				}
+				if status >= 400 {
+					bail!("Nude-Moon HTTP error {status}");
+				}
+				// Токен ещё жив сервером — снимаем паузу и работаем дальше.
+				auth::clear_cf_blocked();
+				let data = response.get_data()?;
+				let html_str = helpers::decode_cp1251(&data);
+				return Ok(Html::parse_with_url(&html_str, &url)?);
+			}
 			println!("nm pause: {}", auth::diag());
 			bail!(
 				"Cloudflare: откройте Настройки источника → «Войти через WebView» → дождитесь закрытия WebView → вернитесь в каталог"

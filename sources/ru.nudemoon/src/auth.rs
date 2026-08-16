@@ -105,6 +105,11 @@ pub fn clearance_is_usable() -> bool {
 	}
 }
 
+/// Есть ли в сессии cf_clearance (без учёта возраста).
+pub fn has_clearance() -> bool {
+	session_value("cf_clearance").is_some()
+}
+
 pub fn is_authorized() -> bool {
 	// fusion_user is the ONLY account auth cookie. userToken is set for
 	// anonymous visitors too, so it must not count as authorization.
